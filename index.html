@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>حجز القاعات الدراسية — جامعة العميد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;500;700;900&display=swap">
+
+<!--
+  ====================================================================
+  خطوات التشغيل (اقرأها قبل الرفع إلى GitHub):
+  1) أنشئ مشروعاً مجانياً على https://console.firebase.google.com
+  2) داخل المشروع: أضف "تطبيق ويب" (أيقونة </>) وانسخ القيم التي تظهر لك.
+  3) فعّل "Firestore Database" من القائمة الجانبية (Build > Firestore Database)
+     واخترْ "Start in test mode" ثم اضبط قواعد الحماية (Rules) على:
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /{document=**} { allow read, write: if true; }
+          }
+        }
+     تنبيه: هذا يجعل قاعدة البيانات مفتوحة لأي شخص يعرف الرابط، دون
+     كلمة مرور حقيقية على مستوى القاعدة نفسها — يكفي لأداة داخلية بسيطة
+     لكنه ليس حلاً أمنياً متقدماً.
+  4) الصق القيم الخمس في المتغير firebaseConfig أسفل هذا التعليق مباشرة.
+  5) ارفع هذا الملف باسم index.html إلى مستودع GitHub، وفعّل GitHub Pages
+     من إعدادات المستودع (Settings > Pages > Deploy from branch).
+  ====================================================================
+-->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+:root{
+  --bg:#F6F3EC; --surface:#FFFFFF; --surface-2:#FBF9F4; --surface-3:#F0ECE1;
+  --ink:#1C2624; --ink-soft:#5B6862; --ink-faint:#8A958F;
+  --border:#E2DDCE; --border-strong:#CFC8B4;
+  --accent:#0B5D4C; --accent-strong:#08483B; --accent-soft:#E3EFE9; --accent-ink:#06392E;
+  --free:#1E8A5F; --free-soft:#E3F3EA;
+  --busy:#B23A3A; --busy-soft:#FBEAEA;
+  --pending:#A5750A; --pending-soft:#FBF1DC;
+  --rejected:#7C7466; --rejected-soft:#EFEBE2;
+  --shadow-sm:0 1px 2px rgba(20,30,28,.07);
+  --shadow-md:0 10px 28px -12px rgba(20,30,28,.22);
+  --radius:14px; --radius-sm:9px;
+  --font-display:'Amiri','Noto Naskh Arabic',serif;
+  --font-body:'Tajawal','Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101614; --surface:#182220; --surface-2:#1C2724; --surface-3:#20302B;
+    --ink:#ECE9DE; --ink-soft:#A9B3AE; --ink-faint:#78847E;
+    --border:#2A3532; --border-strong:#374440;
+    --accent:#3FB393; --accent-strong:#57C7A6; --accent-soft:#1C332C; --accent-ink:#8FE2C6;
+    --free:#3FB393; --free-soft:#17332A;
+    --busy:#E0897C; --busy-soft:#3A211F;
+    --pending:#E0B94D; --pending-soft:#3A2F15;
+    --rejected:#9AA39D; --rejected-soft:#242C29;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+    --shadow-md:0 14px 32px -14px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101614; --surface:#182220; --surface-2:#1C2724; --surface-3:#20302B;
+  --ink:#ECE9DE; --ink-soft:#A9B3AE; --ink-faint:#78847E;
+  --border:#2A3532; --border-strong:#374440;
+  --accent:#3FB393; --accent-strong:#57C7A6; --accent-soft:#1C332C; --accent-ink:#8FE2C6;
+  --free:#3FB393; --free-soft:#17332A;
+  --busy:#E0897C; --busy-soft:#3A211F;
+  --pending:#E0B94D; --pending-soft:#3A2F15;
+  --rejected:#9AA39D; --rejected-soft:#242C29;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.4);
+  --shadow-md:0 14px 32px -14px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box;}
+html{background:var(--bg);}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--font-body);
+}
+#app{
+  direction:rtl; unicode-bidi:isolate; text-align:right;
+  min-height:100%; padding:20px 20px 64px; max-width:1180px; margin:0 auto;
+  display:flex; flex-direction:column; gap:20px;
+}
+h1,h2,h3{font-family:var(--font-display); text-wrap:balance; margin:0; color:var(--ink);}
+p{margin:0;}
+button{font-family:inherit;}
+::selection{background:var(--accent-soft); color:var(--accent-ink);}
+
+/* ---------- top bar ---------- */
+.topbar{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  flex-wrap:wrap; padding-block:4px;
+}
+.brand{display:flex; align-items:center; gap:14px;}
+.brand-mark{flex:none; width:46px; height:46px;}
+.brand-text .eyebrow{
+  font-size:12.5px; letter-spacing:.06em; color:var(--ink-soft); font-weight:500;
+}
+.brand-text h1{font-size:22px; line-height:1.25; margin-top:2px;}
+.session{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.role-pill{
+  display:inline-flex; align-items:center; gap:8px; background:var(--surface);
+  border:1px solid var(--border); border-radius:999px; padding:7px 14px;
+  font-size:13.5px; color:var(--ink-soft); box-shadow:var(--shadow-sm);
+}
+.role-pill strong{color:var(--ink); font-weight:700;}
+.dot{width:8px; height:8px; border-radius:50%; background:var(--accent); flex:none;}
+
+/* ---------- buttons ---------- */
+.btn{
+  border:1px solid var(--border-strong); background:var(--surface); color:var(--ink);
+  border-radius:10px; padding:9px 16px; font-size:14px; font-weight:700; cursor:pointer;
+  transition:transform .08s ease, background .15s ease, border-color .15s ease;
+}
+.btn:hover{border-color:var(--accent);}
+.btn:active{transform:scale(.97);}
+.btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+.btn-primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+.btn-primary:hover{background:var(--accent-strong); border-color:var(--accent-strong);}
+.btn-ghost{background:transparent; border-color:transparent; color:var(--ink-soft);}
+.btn-ghost:hover{color:var(--accent); border-color:var(--border);}
+.btn-danger{color:var(--busy); border-color:var(--busy-soft);}
+.btn-danger:hover{background:var(--busy-soft); border-color:var(--busy);}
+.btn-sm{padding:6px 12px; font-size:12.5px; border-radius:8px;}
+.btn[disabled]{opacity:.45; cursor:not-allowed;}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex; gap:6px; border-bottom:1px solid var(--border); flex-wrap:wrap;}
+.tab{
+  background:transparent; border:none; border-bottom:2.5px solid transparent;
+  padding:11px 6px; margin-bottom:-1px; font-size:14.5px; font-weight:700;
+  color:var(--ink-faint); cursor:pointer;
+}
+.tab:hover{color:var(--ink);}
+.tab.active{color:var(--accent-strong); border-bottom-color:var(--accent);}
+
+/* ---------- generic ---------- */
+.panel{display:flex; flex-direction:column; gap:18px;}
+.card{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:18px 20px; box-shadow:var(--shadow-sm);
+}
+.card h2{font-size:17px;}
+.card h3{font-size:15px;}
+.muted{color:var(--ink-soft); font-size:13.5px;}
+.faint{color:var(--ink-faint); font-size:12.5px;}
+.row{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+.row-between{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+.stack{display:flex; flex-direction:column; gap:6px;}
+hr.sep{border:none; border-top:1px solid var(--border); margin:2px 0;}
+
+/* ---------- clock ---------- */
+.clock-card{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;}
+.clock-time{font-size:32px; font-weight:900; font-variant-numeric:tabular-nums; color:var(--accent-strong);}
+.clock-date{font-size:14.5px; color:var(--ink-soft); margin-top:2px;}
+.legend{display:flex; gap:14px; flex-wrap:wrap;}
+.legend-item{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-soft);}
+.legend-dot{width:10px; height:10px; border-radius:3px;}
+
+/* ---------- room grid ---------- */
+.grid-rooms{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px;
+}
+.room-card{
+  border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px;
+  background:var(--surface); display:flex; flex-direction:column; gap:8px;
+  border-inline-start:4px solid var(--border-strong);
+}
+.room-card[data-status="free"]{border-inline-start-color:var(--free);}
+.room-card[data-status="busy"]{border-inline-start-color:var(--busy);}
+.room-head{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+.room-name{font-weight:900; font-size:15.5px;}
+.status-pill{
+  font-size:11.5px; font-weight:800; padding:3px 10px; border-radius:999px; white-space:nowrap;
+}
+.status-pill.free{background:var(--free-soft); color:var(--free);}
+.status-pill.busy{background:var(--busy-soft); color:var(--busy);}
+.status-pill.pending{background:var(--pending-soft); color:var(--pending);}
+.status-pill.rejected{background:var(--rejected-soft); color:var(--rejected);}
+.status-pill.approved{background:var(--free-soft); color:var(--free);}
+.room-detail{font-size:13px; color:var(--ink-soft); line-height:1.6;}
+.room-detail b{color:var(--ink); font-weight:700;}
+.conflict-flag{
+  font-size:11.5px; font-weight:800; color:var(--busy); background:var(--busy-soft);
+  border-radius:8px; padding:3px 8px; display:inline-flex; gap:4px; align-items:center; width:fit-content;
+}
+
+/* ---------- chips ---------- */
+.chip-row{display:flex; gap:8px; flex-wrap:wrap;}
+.chip{
+  border:1px solid var(--border-strong); background:var(--surface); color:var(--ink-soft);
+  border-radius:999px; padding:7px 15px; font-size:13.5px; font-weight:700; cursor:pointer;
+}
+.chip:hover{color:var(--ink);}
+.chip.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+/* ---------- forms ---------- */
+.form-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;}
+.field{display:flex; flex-direction:column; gap:5px;}
+.field label{font-size:12.5px; font-weight:700; color:var(--ink-soft);}
+.field input, .field select, .field textarea{
+  font-family:inherit; font-size:14px; padding:9px 11px; border-radius:9px;
+  border:1px solid var(--border-strong); background:var(--surface-2); color:var(--ink);
+}
+.field input:focus, .field select:focus, .field textarea:focus{
+  outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent);
+}
+.field textarea{resize:vertical; min-height:60px;}
+
+/* ---------- weekly schedule ---------- */
+.week-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:12px;}
+@media (max-width:760px){ .week-grid{grid-template-columns:1fr;} }
+.day-col{
+  background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:10px; display:flex; flex-direction:column; gap:8px; min-height:70px;
+}
+.day-head{font-weight:800; font-size:13.5px; color:var(--accent-strong); padding-bottom:4px; border-bottom:1px dashed var(--border-strong);}
+.entry-item{
+  background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:8px 10px;
+  font-size:12.8px; display:flex; flex-direction:column; gap:2px; position:relative;
+}
+.entry-time{font-weight:800; font-variant-numeric:tabular-nums; color:var(--accent-strong);}
+.entry-del{
+  position:absolute; inset-inline-end:6px; top:6px; background:none; border:none; color:var(--ink-faint);
+  cursor:pointer; font-size:13px; line-height:1;
+}
+.entry-del:hover{color:var(--busy);}
+.empty-note{color:var(--ink-faint); font-size:12px; padding:6px 2px;}
+
+/* ---------- bookings ---------- */
+.booking-card{
+  border:1px solid var(--border); border-radius:var(--radius-sm); padding:13px 15px;
+  background:var(--surface); display:flex; flex-direction:column; gap:8px;
+}
+.booking-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;}
+.booking-title{font-weight:800; font-size:14.5px;}
+.booking-meta{font-size:12.8px; color:var(--ink-soft); display:flex; gap:12px; flex-wrap:wrap;}
+.booking-note{font-size:12.5px; color:var(--ink-soft); background:var(--surface-3); border-radius:8px; padding:6px 10px;}
+.badge{
+  font-size:11px; font-weight:800; padding:3px 9px; border-radius:999px; background:var(--accent-soft); color:var(--accent-ink);
+}
+
+/* ---------- modal / toast ---------- */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(10,15,14,.45); display:flex; align-items:center;
+  justify-content:center; padding:20px; z-index:50;
+}
+.modal{
+  background:var(--surface); border-radius:var(--radius); padding:22px; width:100%; max-width:380px;
+  box-shadow:var(--shadow-md); display:flex; flex-direction:column; gap:14px;
+}
+.modal h3{font-size:17px;}
+.error-text{color:var(--busy); font-size:13px; font-weight:700;}
+.toast{
+  position:fixed; bottom:22px; inset-inline-start:50%; transform:translateX(-50%);
+  background:var(--ink); color:var(--surface); padding:11px 20px; border-radius:999px;
+  font-size:13.5px; font-weight:700; box-shadow:var(--shadow-md); z-index:60;
+}
+@media (prefers-reduced-motion:no-preference){
+  .modal{animation:pop .15s ease;}
+}
+@keyframes pop{from{transform:scale(.96); opacity:0;} to{transform:scale(1); opacity:1;}}
+.warn-box{
+  background:var(--pending-soft); color:var(--pending); border:1px solid var(--pending);
+  border-radius:9px; padding:10px 12px; font-size:13px; display:flex; flex-direction:column; gap:8px;
+}
+.footnote{
+  text-align:center; color:var(--ink-faint); font-size:12px; padding-top:6px; line-height:1.7;
+}
+[hidden]{display:none !important;}
+
+/* ---------- excel import ---------- */
+.import-actions{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+.file-drop{
+  border:1.5px dashed var(--border-strong); border-radius:var(--radius-sm); padding:14px 16px;
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--surface-2);
+}
+.table-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius-sm);}
+table.import-table{border-collapse:collapse; width:100%; font-size:12.8px; min-width:640px;}
+table.import-table th, table.import-table td{
+  padding:7px 10px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap;
+}
+table.import-table th{background:var(--surface-2); color:var(--ink-soft); font-weight:800; font-size:12px;}
+table.import-table tr.row-error td{background:var(--busy-soft);}
+table.import-table tr.row-conflict td{background:var(--pending-soft);}
+.import-summary{font-size:13px; color:var(--ink-soft); display:flex; gap:14px; flex-wrap:wrap;}
+.import-summary b{color:var(--ink);}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M24 4C15 12 10 18 10 27a14 14 0 0 0 28 0c0-9-5-15-14-23Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
+        <path d="M18 44V27a6 6 0 0 1 12 0v17" stroke="var(--accent)" stroke-width="2" fill="none"/>
+        <circle cx="24" cy="20" r="3" fill="var(--accent)"/>
+      </svg>
+      <div class="brand-text">
+        <div class="eyebrow">جامعة العميد — الشؤون الإدارية والقانونية</div>
+        <h1>نظام حجز القاعات الدراسية</h1>
+      </div>
+    </div>
+    <div class="session">
+      <span class="role-pill" id="rolePill"><span class="dot"></span><span id="roleLabel">مشاهد</span></span>
+      <button class="btn" id="loginBtn" type="button">تسجيل الدخول</button>
+    </div>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="home" type="button">الرئيسية</button>
+    <button class="tab" data-tab="schedule" type="button">الجدول الأسبوعي</button>
+    <button class="tab" data-tab="bookings" type="button">طلبات الحجز</button>
+    <button class="tab" data-tab="admin" id="adminTabBtn" type="button" hidden>الإدارة</button>
+  </nav>
+
+  <div id="dbWarning" class="card" hidden>
+    <p class="muted">⏳ جارٍ الاتصال بقاعدة البيانات...</p>
+  </div>
+
+  <!-- HOME -->
+  <section class="panel" id="panel-home">
+    <div class="card clock-card">
+      <div>
+        <div class="clock-time" id="clockTime">--:--</div>
+        <div class="clock-date" id="clockDate">—</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--free)"></span> فارغة الآن</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--busy)"></span> مشغولة الآن</span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--pending)"></span> بانتظار الموافقة</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row-between">
+        <h2>حالة القاعات الآن</h2>
+        <span class="faint" id="roomsCount"></span>
+      </div>
+      <div class="grid-rooms" id="roomsGrid"></div>
+    </div>
+  </section>
+
+  <!-- SCHEDULE -->
+  <section class="panel" id="panel-schedule" hidden>
+    <div class="card">
+      <div class="row-between">
+        <h2>الجدول الأسبوعي حسب الكلية</h2>
+      </div>
+      <div class="chip-row" id="collegeChips"></div>
+    </div>
+    <div class="card" id="importCard" hidden>
+      <h3>رفع الجدول من ملف Excel</h3>
+      <p class="muted">نزّل النموذج، عبّئه بجدول الكلية الأسبوعي، ثم ارفعه هنا. الأعمدة بالترتيب: اليوم، القاعة، من (HH:MM)، إلى (HH:MM)، المادة، التدريسي. أسماء الأيام والقاعات يجب أن تطابق القيم المعتمدة في النظام (موجودة في ورقة "القيم المسموحة" داخل النموذج).</p>
+      <div class="import-actions">
+        <button class="btn" type="button" id="downloadTemplateBtn">📥 تنزيل نموذج Excel فارغ</button>
+      </div>
+      <div class="file-drop">
+        <label for="scheduleFile" class="btn btn-primary" style="cursor:pointer;">📄 اختر ملف Excel</label>
+        <input type="file" id="scheduleFile" accept=".xlsx,.xls,.csv" style="display:none;">
+        <span class="faint" id="fileNameLabel">لم يُختر ملف بعد</span>
+      </div>
+      <div id="importPreview"></div>
+    </div>
+    <div class="card" id="scheduleFormCard" hidden>
+      <h3>إضافة محاضرة واحدة يدوياً</h3>
+      <form id="scheduleForm">
+        <div class="form-grid">
+          <div class="field"><label for="schDay">اليوم</label>
+            <select id="schDay" required></select>
+          </div>
+          <div class="field"><label for="schRoom">القاعة</label>
+            <select id="schRoom" required></select>
+          </div>
+          <div class="field"><label for="schStart">من الساعة</label><input id="schStart" type="time" required></div>
+          <div class="field"><label for="schEnd">إلى الساعة</label><input id="schEnd" type="time" required></div>
+          <div class="field"><label for="schCourse">اسم المادة</label><input id="schCourse" type="text" placeholder="مثال: التشريح" required></div>
+          <div class="field"><label for="schInstructor">التدريسي</label><input id="schInstructor" type="text" placeholder="مثال: د. مشتاق" required></div>
+        </div>
+        <div id="schWarn"></div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btn-primary" type="submit">إضافة إلى الجدول</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="week-grid" id="weekGrid"></div>
+    </div>
+  </section>
+
+  <!-- BOOKINGS -->
+  <section class="panel" id="panel-bookings" hidden>
+    <div class="card">
+      <h2>طلب حجز قاعة لفعالية</h2>
+      <p class="muted">لورشة عمل، دورة تدريبية، محاضرة إضافية أو أي نشاط خارج الجدول الاعتيادي. يُحال الطلب إلى مدير التعليم المستمر لإبداء الموافقة.</p>
+      <form id="bookingForm">
+        <div class="form-grid">
+          <div class="field"><label for="bkName">اسم مقدّم الطلب</label><input id="bkName" type="text" required></div>
+          <div class="field"><label for="bkCollege">الكلية / الجهة</label><input id="bkCollege" type="text" placeholder="مثال: كلية الطب"></div>
+          <div class="field"><label for="bkRoom">القاعة</label><select id="bkRoom" required></select></div>
+          <div class="field"><label for="bkType">نوع الفعالية</label><select id="bkType" required></select></div>
+          <div class="field"><label for="bkDate">التاريخ</label><input id="bkDate" type="date" required></div>
+          <div class="field"><label for="bkStart">من الساعة</label><input id="bkStart" type="time" required></div>
+          <div class="field"><label for="bkEnd">إلى الساعة</label><input id="bkEnd" type="time" required></div>
+          <div class="field" style="grid-column:1/-1;"><label for="bkTitle">عنوان الفعالية / الغرض</label><input id="bkTitle" type="text" placeholder="مثال: ورشة عن أساليب التدريس الحديثة" required></div>
+        </div>
+        <div id="bkWarn"></div>
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btn-primary" type="submit">إرسال الطلب</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="row-between">
+        <h2>الطلبات</h2>
+        <div class="chip-row" id="bookingFilterChips">
+          <button class="chip active" data-filter="all" type="button">الكل</button>
+          <button class="chip" data-filter="pending" type="button">قيد الانتظار</button>
+          <button class="chip" data-filter="approved" type="button">معتمدة</button>
+          <button class="chip" data-filter="rejected" type="button">مرفوضة</button>
+        </div>
+      </div>
+      <div class="stack" id="bookingsList"></div>
+    </div>
+  </section>
+
+  <!-- ADMIN -->
+  <section class="panel" id="panel-admin" hidden>
+    <div class="card">
+      <h2>الكليات</h2>
+      <div class="stack" id="collegesAdminList"></div>
+      <hr class="sep">
+      <h3>إضافة كلية جديدة</h3>
+      <form id="collegeForm" class="form-grid">
+        <div class="field"><label for="colName">اسم الكلية</label><input id="colName" type="text" required></div>
+        <div class="field"><label for="colPerson">اسم مسؤول الجدول</label><input id="colPerson" type="text" required></div>
+        <div class="field"><label for="colCode">كلمة مرور الدخول</label><input id="colCode" type="text" required></div>
+        <div class="field" style="align-self:end;"><button class="btn btn-primary" type="submit">إضافة</button></div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>القاعات</h2>
+      <div class="stack" id="roomsAdminList"></div>
+      <hr class="sep">
+      <form id="roomForm" class="row">
+        <input id="roomName" type="text" placeholder="اسم القاعة الجديدة" required style="flex:1; min-width:180px; padding:9px 11px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface-2); color:var(--ink); font-family:inherit;">
+        <button class="btn btn-primary" type="submit">إضافة قاعة</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>صلاحيات الدخول</h2>
+      <p class="muted">يمكنك هنا تغيير الأسماء وكلمات المرور الخاصة بكل دور. هذا إجراء تنظيمي وليس نظام حماية متقدم — أي شخص يعرف كلمة المرور يدخل بذلك الدور.</p>
+      <div class="stack" id="codesAdminList"></div>
+    </div>
+  </section>
+
+  <p class="footnote">نظام داخلي لإدارة حجز القاعات — جامعة العميد. الدخول بالأدوار إجراء تنظيمي لتنسيق العمل، وليس نظام مصادقة متقدم.</p>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ====================================================================
+     الصق هنا إعدادات مشروع Firebase الخاص بك (الخطوة 4 في التعليق أعلى
+     الملف). القيم تأتي من: Firebase Console > Project settings > عام >
+     تطبيقاتك > إعدادات SDK.
+     ==================================================================== */
+  var firebaseConfig = {
+    apiKey: "PASTE_YOUR_API_KEY_HERE",
+    authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+    projectId: "PASTE_YOUR_PROJECT_ID",
+    storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+    messagingSenderId: "PASTE_YOUR_SENDER_ID",
+    appId: "PASTE_YOUR_APP_ID"
+  };
+
+  var DEFAULT_CONFIG = {
+    colleges: [
+      {id:'med', name:'كلية الطب'},
+      {id:'nur', name:'كلية التمريض'},
+      {id:'den', name:'طب الأسنان'},
+      {id:'phar', name:'الصيدلة'},
+      {id:'hmt', name:'التقنيات الصحية والطبية'},
+      {id:'edu', name:'التربية الأساسية للبنات'}
+    ],
+    rooms: [
+      {id:'sg1',name:'Small Group 1'},{id:'sg2',name:'Small Group 2'},{id:'sg3',name:'Small Group 3'},
+      {id:'sg4',name:'Small Group 4'},{id:'sg5',name:'Small Group 5'},{id:'sg6',name:'Small Group 6'},
+      {id:'sg7',name:'Small Group 7'},{id:'sg8',name:'Small Group 8'},{id:'sg9',name:'Small Group 9'}
+    ],
+    people: {
+      admin: 'د. مشتاق كريم', ceManager: 'د. حيدر الاعرجي',
+      college: {med:'د. رياض', nur:'د. ضياء', den:'', phar:'', hmt:'', edu:''}
+    },
+    codes: {
+      admin: 'ameed-admin-2026', ceManager: 'ameed-ce-2026',
+      college: {med:'ameed-med-2026', nur:'ameed-nur-2026', den:'ameed-den-2026', phar:'ameed-phar-2026', hmt:'ameed-hmt-2026', edu:'ameed-edu-2026'}
+    }
+  };
+
+  var WEEK_DAYS = [
+    {code:'sun', label:'الأحد'},
+    {code:'mon', label:'الاثنين'},
+    {code:'tue', label:'الثلاثاء'},
+    {code:'wed', label:'الأربعاء'},
+    {code:'thu', label:'الخميس'}
+  ];
+  var WEEKDAY_AR_FULL = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  var MONTH_AR = ['كانون الثاني','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'];
+  var BOOKING_TYPES = [
+    {id:'lecture', label:'محاضرة إضافية'},
+    {id:'workshop', label:'ورشة عمل'},
+    {id:'course', label:'دورة تدريبية'},
+    {id:'meeting', label:'اجتماع'},
+    {id:'other', label:'أخرى'}
+  ];
+  var STATUS_LABEL = {pending:'قيد الانتظار', approved:'معتمدة', rejected:'مرفوضة'};
+  var DAY_ALIASES = {
+    'الأحد':'sun','الاحد':'sun','احد':'sun','sunday':'sun','sun':'sun',
+    'الاثنين':'mon','الإثنين':'mon','اثنين':'mon','monday':'mon','mon':'mon',
+    'الثلاثاء':'tue','ثلاثاء':'tue','tuesday':'tue','tue':'tue',
+    'الأربعاء':'wed','الاربعاء':'wed','اربعاء':'wed','wednesday':'wed','wed':'wed',
+    'الخميس':'thu','خميس':'thu','thursday':'thu','thu':'thu'
+  };
+
+  var db = null;
+  var config = null;
+  var scheduleEntries = [];
+  var bookings = [];
+  var session = {role:'viewer', collegeId:null, code:null};
+  var scheduleCollege = null;
+  var bookingFilter = 'all';
+  var pendingConflict = null; // {kind:'schedule'|'booking', data, conflictEntry}
+  var armedActions = {}; // for two-step confirm buttons
+  var importedRows = []; // parsed+validated rows awaiting commit
+
+  function $(id){ return document.getElementById(id); }
+  function el(tag, attrs, children){
+    var n = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function(k){
+      if(k === 'class') n.className = attrs[k];
+      else if(k === 'html') n.innerHTML = attrs[k];
+      else if(k === 'text') n.textContent = attrs[k];
+      else if(k.indexOf('on') === 0 && typeof attrs[k] === 'function') n.addEventListener(k.slice(2), attrs[k]);
+      else n.setAttribute(k, attrs[k]);
+    });
+    (children||[]).forEach(function(c){ if(c) n.appendChild(c); });
+    return n;
+  }
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function fmtHM(d){ return pad(d.getHours())+':'+pad(d.getMinutes()); }
+  function fmtISODate(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+  function jsDayToCode(jsDay){ var map=[ 'sun','mon','tue','wed','thu',null,null]; return map[jsDay]; }
+  function overlap(s1,e1,s2,e2){ return s1 < e2 && s2 < e1; }
+  function collegeName(id){
+    if(!config) return id;
+    var c = config.colleges.find(function(x){return x.id===id;});
+    return c ? c.name : id;
+  }
+  function roomName(id){
+    if(!config) return id;
+    var r = config.rooms.find(function(x){return x.id===id;});
+    return r ? r.name : id;
+  }
+  function dayLabel(code){ var d=WEEK_DAYS.find(function(x){return x.code===code;}); return d?d.label:code; }
+  function typeLabel(id){ var t=BOOKING_TYPES.find(function(x){return x.id===id;}); return t?t.label:id; }
+
+  function showToast(msg){
+    var root = $('toastRoot');
+    root.innerHTML = '';
+    var t = el('div',{class:'toast', text:msg});
+    root.appendChild(t);
+    setTimeout(function(){ if(root.contains(t)) root.removeChild(t); }, 3200);
+  }
+
+  /* ---------------- session ---------------- */
+  function loadSession(){
+    try{
+      var raw = localStorage.getItem('ameed_room_session');
+      if(raw){ session = JSON.parse(raw); }
+    }catch(e){ session = {role:'viewer', collegeId:null, code:null}; }
+  }
+  function saveSession(){
+    try{ localStorage.setItem('ameed_room_session', JSON.stringify(session)); }catch(e){}
+  }
+  function revalidateSession(){
+    if(!config || session.role === 'viewer') return;
+    var ok = false;
+    if(session.role === 'admin') ok = session.code === config.codes.admin;
+    else if(session.role === 'ce') ok = session.code === config.codes.ceManager;
+    else if(session.role === 'college') ok = session.code === (config.codes.college || {})[session.collegeId];
+    if(!ok){
+      session = {role:'viewer', collegeId:null, code:null};
+      saveSession();
+      showToast('تم تسجيل الخروج — تحقّق من كلمة المرور وسجّل الدخول مجدداً');
+    }
+  }
+  function roleDisplayLabel(){
+    if(session.role === 'viewer') return 'مشاهد';
+    if(session.role === 'admin') return 'المسؤول العام'+(config&&config.people?' — '+config.people.admin:'');
+    if(session.role === 'ce') return 'مدير التعليم المستمر'+(config&&config.people?' — '+config.people.ceManager:'');
+    if(session.role === 'college') return 'مسؤول جدول '+collegeName(session.collegeId);
+    return 'مشاهد';
+  }
+  function canEditCollege(collegeId){
+    return session.role === 'admin' || (session.role === 'college' && session.collegeId === collegeId);
+  }
+  function canApprove(){ return session.role === 'admin' || session.role === 'ce'; }
+  function isAdmin(){ return session.role === 'admin'; }
+
+  /* ---------------- init ---------------- */
+  function init(){
+    loadSession();
+    bindShell();
+    renderSession();
+
+    var notConfigured = !firebaseConfig.apiKey || firebaseConfig.apiKey.indexOf('PASTE_') === 0;
+    if(!window.firebase || notConfigured){
+      $('dbWarning').hidden = false;
+      $('dbWarning').innerHTML = '<p class="muted">⚠️ لم يتم إعداد قاعدة البيانات بعد. افتح ملف الصفحة وضع إعدادات Firebase الخاصة بك في المتغيّر firebaseConfig أعلى الكود، ثم احفظ الملف وأعد رفعه.</p>';
+      return;
+    }
+    try{
+      if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+    }catch(e){ db = null; }
+    if(!db){
+      $('dbWarning').hidden = false;
+      $('dbWarning').innerHTML = '<p class="muted">⚠️ تعذّر الاتصال بقاعدة البيانات. تحقّق من صحة إعدادات firebaseConfig.</p>';
+      return;
+    }
+    $('dbWarning').hidden = true;
+
+    ensureSeed();
+
+    db.doc('config/general').onSnapshot(function(snap){
+      config = snap.exists ? snap.data() : null;
+      revalidateSession();
+      renderSession();
+      renderAdminTabVisibility();
+      renderAll();
+    }, function(){ showToast('تعذّر تحميل إعدادات النظام'); });
+    db.collection('schedule').onSnapshot(function(snap){
+      scheduleEntries = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      renderAll();
+    }, function(){ showToast('تعذّر تحميل الجدول'); });
+    db.collection('bookings').onSnapshot(function(snap){
+      bookings = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      renderAll();
+    }, function(){ showToast('تعذّر تحميل طلبات الحجز'); });
+
+    updateClock();
+    setInterval(updateClock, 1000 * 30);
+  }
+
+  function ensureSeed(){
+    db.doc('config/general').get().then(function(snap){
+      if(!snap.exists){
+        db.doc('config/general').set(DEFAULT_CONFIG).catch(function(){});
+      }
+    }).catch(function(){});
+  }
+
+  function renderAll(){
+    renderHome();
+    renderScheduleTab();
+    renderBookingsTab();
+    renderAdminTab();
+  }
+
+  /* ---------------- shell ---------------- */
+  function bindShell(){
+    document.querySelectorAll('.tab').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        document.querySelectorAll('.tab').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        ['home','schedule','bookings','admin'].forEach(function(t){
+          $('panel-'+t).hidden = (t !== btn.dataset.tab);
+        });
+      });
+    });
+    $('loginBtn').addEventListener('click', openLoginModal);
+    $('scheduleForm').addEventListener('submit', onScheduleSubmit);
+    $('downloadTemplateBtn').addEventListener('click', downloadTemplate);
+    $('scheduleFile').addEventListener('change', onScheduleFileChosen);
+    $('bookingForm').addEventListener('submit', onBookingSubmit);
+    $('collegeForm').addEventListener('submit', onAddCollege);
+    $('roomForm').addEventListener('submit', onAddRoom);
+    document.querySelectorAll('#bookingFilterChips .chip').forEach(function(chip){
+      chip.addEventListener('click', function(){
+        bookingFilter = chip.dataset.filter;
+        document.querySelectorAll('#bookingFilterChips .chip').forEach(function(c){ c.classList.remove('active'); });
+        chip.classList.add('active');
+        renderBookingsTab();
+      });
+    });
+    populateBookingTypeSelect();
+    populateScheduleDaySelect();
+    var today = new Date();
+    $('bkDate').value = fmtISODate(today);
+  }
+
+  function renderAdminTabVisibility(){
+    $('adminTabBtn').hidden = !isAdmin();
+    if(!isAdmin() && !$('panel-admin').hidden){
+      $('adminTabBtn').classList.remove('active');
+      $('panel-admin').hidden = true;
+      $('panel-home').hidden = false;
+      document.querySelector('.tab[data-tab="home"]').classList.add('active');
+    }
+  }
+
+  function renderSession(){
+    $('roleLabel').textContent = roleDisplayLabel();
+    $('loginBtn').textContent = session.role === 'viewer' ? 'تسجيل الدخول' : 'تسجيل الخروج / تبديل الدور';
+  }
+
+  function updateClock(){
+    var now = new Date();
+    $('clockTime').textContent = fmtHM(now);
+    $('clockDate').textContent = WEEKDAY_AR_FULL[now.getDay()]+'، '+now.getDate()+' '+MONTH_AR[now.getMonth()]+' '+now.getFullYear();
+    renderHome();
+  }
+
+  /* ---------------- login modal ---------------- */
+  function openLoginModal(){
+    if(session.role !== 'viewer'){
+      session = {role:'viewer', collegeId:null, code:null};
+      saveSession(); renderSession(); renderAdminTabVisibility(); renderAll();
+      showToast('تم تسجيل الخروج');
+      return;
+    }
+    if(!config){ showToast('يرجى الانتظار حتى تحميل إعدادات النظام'); return; }
+    var root = $('modalRoot');
+    root.innerHTML = '';
+    var roleSelect = el('select', {id:'loginRole'});
+    roleSelect.appendChild(el('option',{value:'viewer', text:'مشاهد (بدون كلمة مرور)'}));
+    roleSelect.appendChild(el('option',{value:'ce', text:'مدير التعليم المستمر — '+((config.people||{}).ceManager||'')}));
+    (config.colleges||[]).forEach(function(c){
+      roleSelect.appendChild(el('option',{value:'college:'+c.id, text:'مسؤول جدول '+c.name+' — '+(((config.people||{}).college||{})[c.id]||'')}));
+    });
+    roleSelect.appendChild(el('option',{value:'admin', text:'المسؤول العام — '+((config.people||{}).admin||'')}));
+
+    var pwField = el('div',{class:'field'},[
+      el('label',{for:'loginPass', text:'كلمة المرور'}),
+      el('input',{id:'loginPass', type:'password', autocomplete:'off'})
+    ]);
+    var errBox = el('div',{class:'error-text', id:'loginErr'});
+
+    roleSelect.addEventListener('change', function(){
+      pwField.hidden = roleSelect.value === 'viewer';
+    });
+
+    var modal = el('div',{class:'modal'},[
+      el('h3',{text:'تسجيل الدخول بدور'}),
+      el('div',{class:'field'},[ el('label',{for:'loginRole', text:'الدور'}), roleSelect ]),
+      pwField,
+      errBox,
+      el('div',{class:'row', style:'justify-content:flex-end;'},[
+        el('button',{class:'btn btn-ghost', type:'button', text:'إلغاء', onclick:closeModal}),
+        el('button',{class:'btn btn-primary', type:'button', text:'دخول', onclick:function(){ submitLogin(roleSelect.value); }})
+      ])
+    ]);
+    var backdrop = el('div',{class:'modal-backdrop', id:'modalBackdrop'},[modal]);
+    backdrop.addEventListener('click', function(e){ if(e.target === backdrop) closeModal(); });
+    root.appendChild(backdrop);
+  }
+  function closeModal(){ $('modalRoot').innerHTML = ''; }
+  function submitLogin(value){
+    var pass = $('loginPass') ? $('loginPass').value : '';
+    if(value === 'viewer'){
+      session = {role:'viewer', collegeId:null, code:null};
+    } else if(value === 'admin'){
+      if(pass !== config.codes.admin){ $('loginErr').textContent = 'كلمة المرور غير صحيحة'; return; }
+      session = {role:'admin', collegeId:null, code:pass};
+    } else if(value === 'ce'){
+      if(pass !== config.codes.ceManager){ $('loginErr').textContent = 'كلمة المرور غير صحيحة'; return; }
+      session = {role:'ce', collegeId:null, code:pass};
+    } else if(value.indexOf('college:') === 0){
+      var cid = value.slice(8);
+      var expected = (config.codes.college||{})[cid];
+      if(pass !== expected){ $('loginErr').textContent = 'كلمة المرور غير صحيحة'; return; }
+      session = {role:'college', collegeId:cid, code:pass};
+    }
+    saveSession();
+    renderSession();
+    renderAdminTabVisibility();
+    renderAll();
+    closeModal();
+    showToast('تم تسجيل الدخول: '+roleDisplayLabel());
+  }
+
+  /* ---------------- HOME ---------------- */
+  function computeRoomStatus(roomId, now){
+    var todayCode = jsDayToCode(now.getDay());
+    var todayISO = fmtISODate(now);
+    var nowTime = fmtHM(now);
+    var current = [];
+    if(todayCode){
+      scheduleEntries.filter(function(e){ return e.room===roomId && e.day===todayCode && e.start<=nowTime && nowTime<e.end; })
+        .forEach(function(e){ current.push(Object.assign({kind:'schedule'}, e)); });
+    }
+    bookings.filter(function(b){ return b.room===roomId && b.status==='approved' && b.date===todayISO && b.start<=nowTime && nowTime<b.end; })
+      .forEach(function(b){ current.push(Object.assign({kind:'booking'}, b)); });
+    var upcoming = [];
+    if(todayCode){
+      scheduleEntries.filter(function(e){ return e.room===roomId && e.day===todayCode && e.start>nowTime; })
+        .forEach(function(e){ upcoming.push(Object.assign({kind:'schedule'}, e)); });
+    }
+    bookings.filter(function(b){ return b.room===roomId && b.status==='approved' && b.date===todayISO && b.start>nowTime; })
+      .forEach(function(b){ upcoming.push(Object.assign({kind:'booking'}, b)); });
+    upcoming.sort(function(a,b){ return a.start.localeCompare(b.start); });
+    return {busy: current.length>0, current: current[0]||null, conflict: current.length>1, next: upcoming[0]||null};
+  }
+
+  function describeItem(item){
+    if(item.kind === 'schedule'){
+      return {title: item.course, sub: item.instructor+' · '+collegeName(item.college)};
+    }
+    return {title: item.title, sub: typeLabel(item.type)+(item.college?(' · '+item.college):'')};
+  }
+
+  function renderHome(){
+    var grid = $('roomsGrid');
+    grid.innerHTML = '';
+    if(!config){ $('roomsCount').textContent=''; return; }
+    var now = new Date();
+    $('roomsCount').textContent = config.rooms.length + ' قاعة';
+    config.rooms.forEach(function(room){
+      var st = computeRoomStatus(room.id, now);
+      var card = el('div',{class:'room-card', 'data-status': st.busy?'busy':'free'});
+      card.appendChild(el('div',{class:'room-head'},[
+        el('span',{class:'room-name', text:room.name}),
+        el('span',{class:'status-pill '+(st.busy?'busy':'free'), text: st.busy?'مشغولة الآن':'فارغة الآن'})
+      ]));
+      if(st.conflict){
+        card.appendChild(el('span',{class:'conflict-flag', text:'⚠️ تعارض في الحجز'}));
+      }
+      if(st.busy){
+        var d = describeItem(st.current);
+        card.appendChild(el('div',{class:'room-detail', html:'<b>'+d.title+'</b><br>'+d.sub+'<br>'+st.current.start+' — '+st.current.end}));
+      } else if(st.next){
+        var dn = describeItem(st.next);
+        card.appendChild(el('div',{class:'room-detail', html:'القادم اليوم: <b>'+dn.title+'</b> — '+st.next.start}));
+      } else {
+        card.appendChild(el('div',{class:'room-detail', text:'لا توجد حجوزات لاحقة اليوم'}));
+      }
+      grid.appendChild(card);
+    });
+  }
+
+  /* ---------------- SCHEDULE ---------------- */
+  function populateScheduleDaySelect(){
+    var sel = $('schDay');
+    sel.innerHTML = '';
+    WEEK_DAYS.forEach(function(d){ sel.appendChild(el('option',{value:d.code, text:d.label})); });
+  }
+  function populateRoomSelects(){
+    [$('schRoom'), $('bkRoom')].forEach(function(sel){
+      if(!sel) return;
+      var current = sel.value;
+      sel.innerHTML = '';
+      (config? config.rooms : []).forEach(function(r){ sel.appendChild(el('option',{value:r.id, text:r.name})); });
+      if(current) sel.value = current;
+    });
+  }
+  function populateBookingTypeSelect(){
+    var sel = $('bkType');
+    sel.innerHTML = '';
+    BOOKING_TYPES.forEach(function(t){ sel.appendChild(el('option',{value:t.id, text:t.label})); });
+  }
+
+  function renderScheduleTab(){
+    populateRoomSelects();
+    var chipRow = $('collegeChips');
+    chipRow.innerHTML = '';
+    if(!config) return;
+    if(!scheduleCollege && config.colleges.length) scheduleCollege = config.colleges[0].id;
+    config.colleges.forEach(function(c){
+      var chip = el('button',{class:'chip'+(c.id===scheduleCollege?' active':''), type:'button', text:c.name});
+      chip.addEventListener('click', function(){ scheduleCollege = c.id; renderScheduleTab(); });
+      chipRow.appendChild(chip);
+    });
+    var canEdit = canEditCollege(scheduleCollege);
+    $('scheduleFormCard').hidden = !canEdit;
+    $('importCard').hidden = !canEdit;
+    if(!canEdit){
+      importedRows = [];
+      $('importPreview').innerHTML = '';
+      $('scheduleFile').value = '';
+      $('fileNameLabel').textContent = 'لم يُختر ملف بعد';
+    }
+
+    var weekGrid = $('weekGrid');
+    weekGrid.innerHTML = '';
+    WEEK_DAYS.forEach(function(day){
+      var col = el('div',{class:'day-col'});
+      col.appendChild(el('div',{class:'day-head', text:day.label}));
+      var entries = scheduleEntries.filter(function(e){ return e.college===scheduleCollege && e.day===day.code; })
+        .sort(function(a,b){ return a.start.localeCompare(b.start); });
+      if(!entries.length){
+        col.appendChild(el('div',{class:'empty-note', text:'لا توجد محاضرات'}));
+      }
+      entries.forEach(function(e){
+        var item = el('div',{class:'entry-item'});
+        item.appendChild(el('div',{class:'entry-time', text:e.start+' – '+e.end}));
+        item.appendChild(el('div',{text:e.course}));
+        item.appendChild(el('div',{class:'faint', text:e.instructor+' · '+roomName(e.room)}));
+        if(canEditCollege(e.college)){
+          var delBtn = el('button',{class:'entry-del', type:'button', text:'✕', title:'حذف'});
+          delBtn.addEventListener('click', function(){ deleteScheduleEntry(e.id); });
+          item.appendChild(delBtn);
+        }
+        col.appendChild(item);
+      });
+      weekGrid.appendChild(col);
+    });
+  }
+
+  function findScheduleConflict(room, day, start, end, excludeId){
+    return scheduleEntries.find(function(e){
+      return e.id !== excludeId && e.room === room && e.day === day && overlap(start,end,e.start,e.end);
+    });
+  }
+
+  function onScheduleSubmit(ev){
+    ev.preventDefault();
+    if(!db || !canEditCollege(scheduleCollege)) return;
+    var data = {
+      college: scheduleCollege,
+      room: $('schRoom').value,
+      day: $('schDay').value,
+      start: $('schStart').value,
+      end: $('schEnd').value,
+      course: $('schCourse').value.trim(),
+      instructor: $('schInstructor').value.trim()
+    };
+    if(data.start >= data.end){ showToast('وقت النهاية يجب أن يكون بعد وقت البداية'); return; }
+    var conflict = findScheduleConflict(data.room, data.day, data.start, data.end, null);
+    var warnBox = $('schWarn');
+    warnBox.innerHTML = '';
+    if(conflict && !(pendingConflict && pendingConflict.kind==='schedule')){
+      pendingConflict = {kind:'schedule', data:data};
+      var d = describeItem(Object.assign({kind:'schedule'}, conflict));
+      var box = el('div',{class:'warn-box'},[
+        el('div',{html:'⚠️ يوجد تعارض مع: <b>'+d.title+'</b> ('+conflict.start+' – '+conflict.end+') في نفس القاعة.'}),
+        el('div',{class:'row'},[
+          el('button',{class:'btn btn-sm btn-primary', type:'button', text:'إضافة رغم التعارض', onclick:function(){ commitScheduleAdd(data); }}),
+          el('button',{class:'btn btn-sm btn-ghost', type:'button', text:'إلغاء', onclick:function(){ pendingConflict=null; warnBox.innerHTML=''; }})
+        ])
+      ]);
+      warnBox.appendChild(box);
+      return;
+    }
+    pendingConflict = null;
+    commitScheduleAdd(data);
+  }
+  function commitScheduleAdd(data){
+    db.collection('schedule').add(Object.assign({}, data, {createdAt: new Date().toISOString()}))
+      .then(function(){
+        $('scheduleForm').reset();
+        $('schWarn').innerHTML = '';
+        showToast('تمت إضافة المحاضرة إلى الجدول');
+      }).catch(function(){ showToast('تعذّرت الإضافة، حاول مجدداً'); });
+  }
+  function deleteScheduleEntry(id){
+    if(!db) return;
+    db.collection('schedule').doc(id).delete().then(function(){ showToast('تم الحذف'); }).catch(function(){ showToast('تعذّر الحذف'); });
+  }
+
+  /* ---------------- EXCEL IMPORT ---------------- */
+  function normalizeTime(v){
+    if(v === null || v === undefined || v === '') return null;
+    if(typeof v === 'number'){
+      var totalMinutes = Math.round(v*24*60);
+      if(!isFinite(totalMinutes)) return null;
+      var h = Math.floor(totalMinutes/60)%24, m = totalMinutes%60;
+      if(h<0||m<0) return null;
+      return pad(h)+':'+pad(m);
+    }
+    var s = String(v).trim();
+    var m2 = s.match(/^(\d{1,2}):(\d{2})/);
+    if(m2){
+      var hh = parseInt(m2[1],10), mm = parseInt(m2[2],10);
+      if(hh>=0 && hh<24 && mm>=0 && mm<60) return pad(hh)+':'+pad(mm);
+    }
+    return null;
+  }
+  function normalizeDay(v){
+    if(v === null || v === undefined) return null;
+    var s = String(v).trim().toLowerCase();
+    return DAY_ALIASES[s] || null;
+  }
+  function normalizeRoom(v){
+    if(!config || v === null || v === undefined) return null;
+    var s = String(v).trim().toLowerCase();
+    var r = config.rooms.find(function(x){ return x.name.trim().toLowerCase() === s; });
+    return r ? r.id : null;
+  }
+  function extractDataRows(rows){
+    if(!rows.length) return [];
+    var first = rows[0] || [];
+    var looksLikeHeader = normalizeTime(first[2]) === null && normalizeDay(first[0]) === null;
+    var body = looksLikeHeader ? rows.slice(1) : rows;
+    return body.filter(function(r){ return r && r.some(function(c){ return String(c||'').trim() !== ''; }); });
+  }
+
+  function triggerBrowserDownload(filename, arrayBuffer){
+    var blob = new Blob([arrayBuffer], {type:'application/octet-stream'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+  }
+
+  function downloadTemplate(){
+    if(!window.XLSX){ showToast('تعذّر تحميل مكتبة Excel، تحقق من الاتصال'); return; }
+    var headers = ['اليوم','القاعة','من (HH:MM)','إلى (HH:MM)','المادة','التدريسي'];
+    var example = ['الأحد', (config&&config.rooms[0]?config.rooms[0].name:'Small Group 1'), '10:00','11:00','مثال: التشريح','د. فلان'];
+    var ws = XLSX.utils.aoa_to_sheet([headers, example]);
+    ws['!cols'] = [{wch:12},{wch:16},{wch:12},{wch:12},{wch:26},{wch:20}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'الجدول');
+    var ws2Data = [['أيام مسموحة (اكتبها كما هي)']]
+      .concat(WEEK_DAYS.map(function(d){ return [d.label]; }))
+      .concat([[''],['أسماء القاعات المعتمدة (اكتبها كما هي تماماً)']])
+      .concat((config?config.rooms:[]).map(function(r){ return [r.name]; }));
+    var ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+    ws2['!cols'] = [{wch:34}];
+    XLSX.utils.book_append_sheet(wb, ws2, 'القيم المسموحة');
+    var out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    var fname = 'نموذج_جدول_'+(config?collegeName(scheduleCollege):'كلية')+'.xlsx';
+    triggerBrowserDownload(fname, out);
+    showToast('تم تنزيل النموذج');
+  }
+
+  function onScheduleFileChosen(ev){
+    var file = ev.target.files && ev.target.files[0];
+    if(!file) return;
+    $('fileNameLabel').textContent = file.name;
+    if(!window.XLSX){ showToast('تعذّر تحميل مكتبة Excel، تحقق من الاتصال'); return; }
+    file.arrayBuffer().then(function(buf){
+      var wb = XLSX.read(buf, {type:'array'});
+      var sheet = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(sheet, {header:1, raw:true, defval:''});
+      var dataRows = extractDataRows(rows);
+      buildImportPreview(dataRows);
+    }).catch(function(){ showToast('تعذّرت قراءة الملف — تأكد أنه بصيغة Excel صحيحة'); });
+  }
+
+  function buildImportPreview(dataRows){
+    importedRows = dataRows.map(function(r){
+      var day = normalizeDay(r[0]);
+      var room = normalizeRoom(r[1]);
+      var start = normalizeTime(r[2]);
+      var end = normalizeTime(r[3]);
+      var course = String(r[4]||'').trim();
+      var instructor = String(r[5]||'').trim();
+      var errors = [];
+      if(!day) errors.push('اسم اليوم غير معروف');
+      if(!room) errors.push('اسم القاعة لا يطابق قاعة معتمدة');
+      if(!start || !end) errors.push('صيغة الوقت غير صحيحة');
+      else if(start >= end) errors.push('وقت النهاية قبل وقت البداية');
+      if(!course) errors.push('اسم المادة مطلوب');
+      if(!instructor) errors.push('اسم التدريسي مطلوب');
+      return {
+        raw:r, day:day, room:room, start:start, end:end, course:course, instructor:instructor,
+        dayRaw:r[0], roomRaw:r[1], errors:errors
+      };
+    });
+    renderImportPreview();
+  }
+
+  function markImportConflicts(mode){
+    var others = scheduleEntries.filter(function(e){
+      return mode === 'append' ? true : e.college !== scheduleCollege;
+    });
+    importedRows.forEach(function(row){
+      row.conflict = null;
+      if(row.errors.length || !row.day || !row.room) return;
+      var extConflict = others.find(function(e){ return e.room===row.room && e.day===row.day && overlap(row.start,row.end,e.start,e.end); });
+      var intConflict = importedRows.find(function(o){
+        return o !== row && !o.errors.length && o.room===row.room && o.day===row.day && overlap(row.start,row.end,o.start,o.end);
+      });
+      if(extConflict) row.conflict = 'يتعارض مع محاضرة قائمة في '+collegeName(extConflict.college)+' ('+extConflict.start+'–'+extConflict.end+')';
+      else if(intConflict) row.conflict = 'يتعارض مع صف آخر داخل نفس الملف';
+    });
+  }
+
+  function renderImportPreview(){
+    var mode = (document.querySelector('input[name="importMode"]:checked')||{}).value || 'replace';
+    markImportConflicts(mode);
+    var box = $('importPreview');
+    box.innerHTML = '';
+    if(!importedRows.length) return;
+    var validCount = importedRows.filter(function(r){ return !r.errors.length; }).length;
+    var conflictCount = importedRows.filter(function(r){ return !r.errors.length && r.conflict; }).length;
+
+    var modeField = el('div',{class:'row', style:'margin-top:8px;'},[
+      el('label',{class:'row', style:'gap:6px; font-size:13px;'},[
+        el('input',{type:'radio', name:'importMode', value:'replace', checked:'checked'}),
+        document.createTextNode('استبدال جدول '+collegeName(scheduleCollege)+' بالكامل بهذا الملف')
+      ]),
+      el('label',{class:'row', style:'gap:6px; font-size:13px;'},[
+        el('input',{type:'radio', name:'importMode', value:'append'}),
+        document.createTextNode('إضافة كمحاضرات جديدة فقط (دون حذف الجدول الحالي)')
+      ])
+    ]);
+    modeField.querySelectorAll('input[name="importMode"]').forEach(function(r){
+      r.addEventListener('change', renderImportPreview);
+    });
+    box.appendChild(modeField);
+
+    var table = el('table',{class:'import-table'});
+    table.appendChild(el('tr',{},[
+      el('th',{text:'#'}), el('th',{text:'اليوم'}), el('th',{text:'القاعة'}), el('th',{text:'من'}),
+      el('th',{text:'إلى'}), el('th',{text:'المادة'}), el('th',{text:'التدريسي'}), el('th',{text:'الحالة'})
+    ]));
+    importedRows.forEach(function(row, i){
+      var cls = row.errors.length ? 'row-error' : (row.conflict ? 'row-conflict' : '');
+      var statusTxt = row.errors.length ? row.errors.join('، ') : (row.conflict ? '⚠️ '+row.conflict : '✓ صالح');
+      table.appendChild(el('tr',{class:cls},[
+        el('td',{text:String(i+1)}),
+        el('td',{text: row.day ? dayLabel(row.day) : String(row.dayRaw||'')}),
+        el('td',{text: row.room ? roomName(row.room) : String(row.roomRaw||'')}),
+        el('td',{text: row.start||'—'}),
+        el('td',{text: row.end||'—'}),
+        el('td',{text: row.course||'—'}),
+        el('td',{text: row.instructor||'—'}),
+        el('td',{text: statusTxt})
+      ]));
+    });
+    box.appendChild(el('div',{class:'table-scroll'},[table]));
+
+    box.appendChild(el('div',{class:'import-summary', style:'margin-top:8px;'},[
+      el('span',{html:'صفوف صالحة: <b>'+validCount+'</b> من أصل '+importedRows.length}),
+      conflictCount ? el('span',{html:'⚠️ تعارضات: <b>'+conflictCount+'</b>'}) : null
+    ]));
+
+    var commitBtn = el('button',{class:'btn btn-primary', type:'button', text: validCount ? 'تنفيذ الاستيراد ('+validCount+' محاضرة)' : 'لا توجد صفوف صالحة للاستيراد'});
+    if(!validCount) commitBtn.disabled = true;
+    commitBtn.addEventListener('click', function(){ commitImport(mode); });
+    box.appendChild(el('div',{class:'row', style:'margin-top:10px;'},[commitBtn]));
+  }
+
+  function commitImport(mode){
+    if(!db || !canEditCollege(scheduleCollege)) return;
+    var validRows = importedRows.filter(function(r){ return !r.errors.length; });
+    if(!validRows.length) return;
+    var toDelete = mode === 'replace' ? scheduleEntries.filter(function(e){ return e.college === scheduleCollege; }) : [];
+    var deletePromises = toDelete.map(function(e){ return db.collection('schedule').doc(e.id).delete(); });
+    Promise.all(deletePromises).then(function(){
+      var addPromises = validRows.map(function(r){
+        return db.collection('schedule').add({
+          college: scheduleCollege, room:r.room, day:r.day, start:r.start, end:r.end,
+          course:r.course, instructor:r.instructor, createdAt:new Date().toISOString(), importedBy: roleDisplayLabel()
+        });
+      });
+      return Promise.all(addPromises);
+    }).then(function(){
+      showToast('تم استيراد '+validRows.length+' محاضرة إلى جدول '+collegeName(scheduleCollege));
+      importedRows = [];
+      $('importPreview').innerHTML = '';
+      $('scheduleFile').value = '';
+      $('fileNameLabel').textContent = 'لم يُختر ملف بعد';
+    }).catch(function(){ showToast('حدث خطأ أثناء الاستيراد — قد يكون تم استيراد جزء من الصفوف'); });
+  }
+
+  /* ---------------- BOOKINGS ---------------- */
+  function dateToDayCode(dateStr){
+    var d = new Date(dateStr+'T00:00:00');
+    return jsDayToCode(d.getDay());
+  }
+  function findBookingConflicts(room, date, start, end){
+    var hard = bookings.filter(function(b){ return b.room===room && b.date===date && b.status==='approved' && overlap(start,end,b.start,b.end); });
+    var dayCode = dateToDayCode(date);
+    var schedHard = dayCode ? scheduleEntries.filter(function(e){ return e.room===room && e.day===dayCode && overlap(start,end,e.start,e.end); }) : [];
+    var soft = bookings.filter(function(b){ return b.room===room && b.date===date && b.status==='pending' && overlap(start,end,b.start,b.end); });
+    return {hard: hard.concat(schedHard.map(function(e){ return Object.assign({kind:'schedule'}, e); })), soft: soft};
+  }
+
+  function onBookingSubmit(ev){
+    ev.preventDefault();
+    if(!db) return;
+    var data = {
+      requester: $('bkName').value.trim(),
+      college: $('bkCollege').value.trim(),
+      room: $('bkRoom').value,
+      type: $('bkType').value,
+      date: $('bkDate').value,
+      start: $('bkStart').value,
+      end: $('bkEnd').value,
+      title: $('bkTitle').value.trim()
+    };
+    if(data.start >= data.end){ showToast('وقت النهاية يجب أن يكون بعد وقت البداية'); return; }
+    var conflicts = findBookingConflicts(data.room, data.date, data.start, data.end);
+    var hasHard = conflicts.hard.length > 0;
+    data.status = 'pending';
+    data.conflictWarning = hasHard;
+    data.createdAt = new Date().toISOString();
+    db.collection('bookings').add(data).then(function(){
+      $('bookingForm').reset();
+      $('bkDate').value = fmtISODate(new Date());
+      $('bkWarn').innerHTML = '';
+      if(hasHard){
+        showToast('تم إرسال الطلب — تنبيه: الوقت يتعارض مع حجز قائم، سيظهر ذلك للمُوافق');
+      } else {
+        showToast('تم إرسال طلب الحجز');
+      }
+    }).catch(function(){ showToast('تعذّر إرسال الطلب'); });
+  }
+
+  function renderBookingsTab(){
+    populateRoomSelects();
+    var list = $('bookingsList');
+    list.innerHTML = '';
+    var items = bookings.slice().sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
+    if(bookingFilter !== 'all') items = items.filter(function(b){ return b.status === bookingFilter; });
+    if(!items.length){ list.appendChild(el('p',{class:'muted', text:'لا توجد طلبات في هذا التصنيف'})); return; }
+    items.forEach(function(b){
+      var card = el('div',{class:'booking-card'});
+      card.appendChild(el('div',{class:'booking-top'},[
+        el('div',{},[
+          el('div',{class:'booking-title', text:b.title}),
+          el('div',{class:'booking-meta'},[
+            el('span',{text:'📍 '+roomName(b.room)}),
+            el('span',{text:'📅 '+b.date}),
+            el('span',{text:'🕐 '+b.start+' – '+b.end}),
+            el('span',{text:'👤 '+b.requester+(b.college?(' — '+b.college):'')}),
+            el('span',{class:'badge', text:typeLabel(b.type)})
+          ])
+        ]),
+        el('span',{class:'status-pill '+b.status, text:STATUS_LABEL[b.status]||b.status})
+      ]));
+      if(b.conflictWarning && b.status === 'pending'){
+        card.appendChild(el('div',{class:'conflict-flag', text:'⚠️ يتعارض مع حجز قائم — يُرجى المراجعة قبل الموافقة'}));
+      }
+      if(b.status === 'rejected' && b.note){
+        card.appendChild(el('div',{class:'booking-note', text:'سبب الرفض: '+b.note}));
+      }
+      if(b.decidedBy){
+        card.appendChild(el('div',{class:'faint', text:'بواسطة: '+b.decidedBy}));
+      }
+      if(canApprove() && b.status === 'pending'){
+        var actionsRow = el('div',{class:'row'});
+        var approveBtn = el('button',{class:'btn btn-sm btn-primary', type:'button', text:'موافقة'});
+        approveBtn.addEventListener('click', function(){ handleApprove(b, approveBtn); });
+        var rejectBtn = el('button',{class:'btn btn-sm btn-danger', type:'button', text:'رفض'});
+        var noteWrap = el('div',{class:'row', hidden:true, id:'rejectWrap-'+b.id});
+        var noteInput = el('input',{type:'text', placeholder:'سبب الرفض (اختياري)', style:'flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--ink);font-family:inherit;'});
+        var confirmReject = el('button',{class:'btn btn-sm btn-danger', type:'button', text:'تأكيد الرفض'});
+        confirmReject.addEventListener('click', function(){ rejectBooking(b.id, noteInput.value.trim()); });
+        noteWrap.appendChild(noteInput);
+        noteWrap.appendChild(confirmReject);
+        rejectBtn.addEventListener('click', function(){ noteWrap.hidden = !noteWrap.hidden; });
+        actionsRow.appendChild(approveBtn);
+        actionsRow.appendChild(rejectBtn);
+        card.appendChild(actionsRow);
+        card.appendChild(noteWrap);
+      }
+      list.appendChild(card);
+    });
+  }
+
+  function handleApprove(b, btn){
+    var conflicts = findBookingConflicts(b.room, b.date, b.start, b.end).hard.filter(function(c){ return c.id !== b.id; });
+    var key = 'approve-'+b.id;
+    if(conflicts.length && !armedActions[key]){
+      armedActions[key] = true;
+      btn.textContent = 'تأكيد رغم التعارض';
+      btn.classList.add('btn-danger');
+      setTimeout(function(){ armedActions[key] = false; btn.textContent = 'موافقة'; btn.classList.remove('btn-danger'); }, 5000);
+      return;
+    }
+    approveBooking(b.id);
+  }
+  function approveBooking(id){
+    db.collection('bookings').doc(id).update({status:'approved', decidedBy:roleDisplayLabel(), decidedAt:new Date().toISOString()})
+      .then(function(){ showToast('تمت الموافقة على الطلب'); }).catch(function(){ showToast('تعذّرت الموافقة'); });
+  }
+  function rejectBooking(id, note){
+    db.collection('bookings').doc(id).update({status:'rejected', decidedBy:roleDisplayLabel(), decidedAt:new Date().toISOString(), note:note||''})
+      .then(function(){ showToast('تم رفض الطلب'); }).catch(function(){ showToast('تعذّر الرفض'); });
+  }
+
+  /* ---------------- ADMIN ---------------- */
+  function renderAdminTab(){
+    if(!isAdmin() || !config) return;
+    var colList = $('collegesAdminList');
+    colList.innerHTML = '';
+    config.colleges.forEach(function(c){
+      var row = el('div',{class:'row-between'},[
+        el('div',{},[
+          el('div',{},[el('b',{},[]), document.createTextNode(c.name)]),
+          el('div',{class:'faint', text:'مسؤول الجدول: '+(((config.people||{}).college||{})[c.id]||'—')})
+        ])
+      ]);
+      var del = el('button',{class:'btn btn-sm btn-danger', type:'button', text:'حذف'});
+      del.addEventListener('click', function(){ deleteCollege(c.id); });
+      row.appendChild(del);
+      colList.appendChild(row);
+    });
+
+    var roomList = $('roomsAdminList');
+    roomList.innerHTML = '';
+    config.rooms.forEach(function(r){
+      var row = el('div',{class:'row-between'},[ el('span',{text:r.name}) ]);
+      var del = el('button',{class:'btn btn-sm btn-danger', type:'button', text:'حذف'});
+      del.addEventListener('click', function(){ deleteRoom(r.id); });
+      row.appendChild(del);
+      roomList.appendChild(row);
+    });
+
+    var codesList = $('codesAdminList');
+    codesList.innerHTML = '';
+    codesList.appendChild(buildCodeRow('المسؤول العام', (config.people||{}).admin, config.codes.admin, function(person, code){ updatePeopleAndCode({admin:person}, {admin:code}); }));
+    codesList.appendChild(buildCodeRow('مدير التعليم المستمر', (config.people||{}).ceManager, config.codes.ceManager, function(person, code){ updatePeopleAndCode({ceManager:person}, {ceManager:code}); }));
+    config.colleges.forEach(function(c){
+      codesList.appendChild(buildCodeRow('مسؤول جدول '+c.name, ((config.people||{}).college||{})[c.id], (config.codes.college||{})[c.id], function(person, code){
+        var people = Object.assign({}, config.people||{});
+        people.college = Object.assign({}, people.college||{});
+        people.college[c.id] = person;
+        var codes = {college: Object.assign({}, config.codes.college||{})};
+        codes.college[c.id] = code;
+        updatePeopleAndCode(people, codes, true);
+      }));
+    });
+  }
+
+  function buildCodeRow(label, personVal, codeVal, onSave){
+    var personInput = el('input',{type:'text', value:personVal||''});
+    var codeInput = el('input',{type:'text', value:codeVal||''});
+    personInput.style.cssText = 'padding:7px 10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface-2);color:var(--ink);font-family:inherit;';
+    codeInput.style.cssText = personInput.style.cssText;
+    var saveBtn = el('button',{class:'btn btn-sm btn-primary', type:'button', text:'حفظ'});
+    saveBtn.addEventListener('click', function(){ onSave(personInput.value.trim(), codeInput.value.trim()); });
+    return el('div',{class:'row', style:'flex-wrap:wrap;'},[
+      el('span',{class:'muted', style:'min-width:170px;', text:label}),
+      personInput, codeInput, saveBtn
+    ]);
+  }
+
+  function configDoc(){ return db.doc('config/general'); }
+  function updatePeopleAndCode(peoplePatch, codesPatch, isCollege){
+    var people = Object.assign({}, config.people||{}, peoplePatch);
+    var codes = Object.assign({}, config.codes||{});
+    if(isCollege){ codes.college = Object.assign({}, codes.college||{}, codesPatch.college); }
+    else { codes = Object.assign({}, codes, codesPatch); }
+    configDoc().update({people: people, codes: codes}).then(function(){ showToast('تم الحفظ'); }).catch(function(){ showToast('تعذّر الحفظ'); });
+  }
+
+  function onAddCollege(ev){
+    ev.preventDefault();
+    if(!isAdmin() || !config) return;
+    var name = $('colName').value.trim();
+    var person = $('colPerson').value.trim();
+    var code = $('colCode').value.trim();
+    if(!name || !code) return;
+    var id = 'c' + Date.now().toString(36);
+    var colleges = config.colleges.concat([{id:id, name:name}]);
+    var people = Object.assign({}, config.people||{});
+    people.college = Object.assign({}, people.college||{});
+    people.college[id] = person;
+    var codes = Object.assign({}, config.codes||{});
+    codes.college = Object.assign({}, codes.college||{});
+    codes.college[id] = code;
+    configDoc().update({colleges: colleges, people: people, codes: codes}).then(function(){
+      $('collegeForm').reset(); showToast('تمت إضافة الكلية');
+    }).catch(function(){ showToast('تعذّرت الإضافة'); });
+  }
+  function deleteCollege(id){
+    if(!isAdmin() || !config) return;
+    var colleges = config.colleges.filter(function(c){ return c.id !== id; });
+    configDoc().update({colleges: colleges}).then(function(){ showToast('تم حذف الكلية'); }).catch(function(){ showToast('تعذّر الحذف'); });
+  }
+  function onAddRoom(ev){
+    ev.preventDefault();
+    if(!isAdmin() || !config) return;
+    var name = $('roomName').value.trim();
+    if(!name) return;
+    var id = 'r' + Date.now().toString(36);
+    var rooms = config.rooms.concat([{id:id, name:name}]);
+    configDoc().update({rooms: rooms}).then(function(){ $('roomForm').reset(); showToast('تمت إضافة القاعة'); }).catch(function(){ showToast('تعذّرت الإضافة'); });
+  }
+  function deleteRoom(id){
+    if(!isAdmin() || !config) return;
+    var rooms = config.rooms.filter(function(r){ return r.id !== id; });
+    configDoc().update({rooms: rooms}).then(function(){ showToast('تم حذف القاعة'); }).catch(function(){ showToast('تعذّر الحذف'); });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
