@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>حجز القاعات الدراسية — جامعة العميد</title>
+<title>نظام العميد الالكتروني للقاعات الدراسية</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@400;500;700;900&display=swap">
 
@@ -47,6 +47,8 @@
   --radius:14px; --radius-sm:9px;
   --font-display:'Amiri','Noto Naskh Arabic',serif;
   --font-body:'Tajawal','Segoe UI',sans-serif;
+  --logo-light:url("assets/logo-light.png");
+  --logo-dark:url("assets/logo-dark.png");
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -96,7 +98,15 @@ button{font-family:inherit;}
   flex-wrap:wrap; padding-block:4px;
 }
 .brand{display:flex; align-items:center; gap:14px;}
-.brand-mark{flex:none; width:46px; height:46px;}
+.brand-mark{flex:none; width:46px; height:46px; background-size:contain; background-repeat:no-repeat; background-position:center;}
+.brand-mark-light{background-image:var(--logo-light);}
+.brand-mark-dark{background-image:var(--logo-dark); display:none;}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .brand-mark-light{ display:none; }
+  :root:not([data-theme="light"]) .brand-mark-dark{ display:block; }
+}
+:root[data-theme="dark"] .brand-mark-light{ display:none; }
+:root[data-theme="dark"] .brand-mark-dark{ display:block; }
 .brand-text .eyebrow{
   font-size:12.5px; letter-spacing:.06em; color:var(--ink-soft); font-weight:500;
 }
@@ -324,7 +334,20 @@ table.report-table th{background:var(--surface-2); color:var(--ink-soft); font-w
   table.report-table{ min-width:0 !important; width:100% !important; }
   .table-scroll{ overflow:visible !important; }
   @page{ size:landscape; margin:12mm; }
+  .report-logo-light{ display:block !important; }
+  .report-logo-dark{ display:none !important; }
 }
+.report-logo-light, .report-logo-dark{
+  width:52px; height:52px; flex:none; background-size:contain; background-repeat:no-repeat; background-position:center;
+}
+.report-logo-light{background-image:var(--logo-light);}
+.report-logo-dark{background-image:var(--logo-dark); display:none;}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .report-logo-light{ display:none; }
+  :root:not([data-theme="light"]) .report-logo-dark{ display:block; }
+}
+:root[data-theme="dark"] .report-logo-light{ display:none; }
+:root[data-theme="dark"] .report-logo-dark{ display:block; }
 </style>
 </head>
 <body>
@@ -333,14 +356,11 @@ table.report-table th{background:var(--surface-2); color:var(--ink-soft); font-w
 
   <div class="topbar">
     <div class="brand">
-      <svg class="brand-mark" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M24 4C15 12 10 18 10 27a14 14 0 0 0 28 0c0-9-5-15-14-23Z" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/>
-        <path d="M18 44V27a6 6 0 0 1 12 0v17" stroke="var(--accent)" stroke-width="2" fill="none"/>
-        <circle cx="24" cy="20" r="3" fill="var(--accent)"/>
-      </svg>
+      <div class="brand-mark brand-mark-light" role="img" aria-label="شعار جامعة العميد"></div>
+      <div class="brand-mark brand-mark-dark" role="img" aria-label="شعار جامعة العميد"></div>
       <div class="brand-text">
         <div class="eyebrow">جامعة العميد — الشؤون الإدارية والقانونية</div>
-        <h1>نظام حجز القاعات الدراسية</h1>
+        <h1>نظام العميد الالكتروني للقاعات الدراسية</h1>
       </div>
     </div>
     <div class="session">
@@ -1323,7 +1343,7 @@ table.report-table th{background:var(--surface-2); color:var(--ink-soft); font-w
       return a.start.localeCompare(b.start);
     });
 
-    var logoSvg = el('div',{class:'report-logo', html:'<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="52" height="52"><path d="M24 4C15 12 10 18 10 27a14 14 0 0 0 28 0c0-9-5-15-14-23Z" fill="#E3EFE9" stroke="#0B5D4C" stroke-width="2"/><path d="M18 44V27a6 6 0 0 1 12 0v17" stroke="#0B5D4C" stroke-width="2" fill="none"/><circle cx="24" cy="20" r="3" fill="#0B5D4C"/></svg>'});
+    var logoSvg = el('div',{class:'report-logo', html:'<div class="report-logo-light" role="img" aria-label="شعار جامعة العميد"></div><div class="report-logo-dark" role="img" aria-label="شعار جامعة العميد"></div>'});
 
     var reportRoot = el('div',{class:'report-sheet', id:'printableReport'});
     reportRoot.appendChild(el('div',{class:'report-head'},[
