@@ -212,7 +212,7 @@ hr.sep{border:none; border-top:1px solid var(--border); margin:2px 0;}
 .field textarea{resize:vertical; min-height:60px;}
 
 /* ---------- weekly schedule ---------- */
-.week-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:12px;}
+.week-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:12px;}
 @media (max-width:760px){ .week-grid{grid-template-columns:1fr;} }
 .day-col{
   background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm);
@@ -356,7 +356,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     </div>
     <div class="card" id="importCard" hidden>
       <h3>رفع الجدول من ملف Excel</h3>
-      <p class="muted">نزّل النموذج، عبّئه بجدول الكلية الأسبوعي، ثم ارفعه هنا. الأعمدة بالترتيب: اليوم، القاعة، من (HH:MM)، إلى (HH:MM)، المادة، التدريسي. أسماء الأيام والقاعات يجب أن تطابق القيم المعتمدة في النظام (موجودة في ورقة "القيم المسموحة" داخل النموذج).</p>
+      <p class="muted">نزّل النموذج، عبّئه بجدول الكلية الأسبوعي، ثم ارفعه هنا. الأعمدة بالترتيب: اليوم، القاعة، من (HH:MM)، إلى (HH:MM)، المادة، التدريسي، المرحلة الدراسية. أسماء الأيام والقاعات يجب أن تطابق القيم المعتمدة في النظام (موجودة في ورقة "القيم المسموحة" داخل النموذج).</p>
       <div class="import-actions">
         <button class="btn" type="button" id="downloadTemplateBtn">📥 تنزيل نموذج Excel فارغ</button>
       </div>
@@ -381,6 +381,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
           <div class="field"><label for="schEnd">إلى الساعة</label><input id="schEnd" type="time" required></div>
           <div class="field"><label for="schCourse">اسم المادة</label><input id="schCourse" type="text" placeholder="مثال: التشريح" required></div>
           <div class="field"><label for="schInstructor">التدريسي</label><input id="schInstructor" type="text" placeholder="مثال: د. مشتاق" required></div>
+          <div class="field"><label for="schStage">المرحلة الدراسية</label><input id="schStage" type="text" placeholder="مثال: المرحلة الثانية" required></div>
         </div>
         <div id="schWarn"></div>
         <div class="row" style="margin-top:10px;">
@@ -508,6 +509,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
   };
 
   var WEEK_DAYS = [
+    {code:'sat', label:'السبت'},
     {code:'sun', label:'الأحد'},
     {code:'mon', label:'الاثنين'},
     {code:'tue', label:'الثلاثاء'},
@@ -529,7 +531,8 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     'الاثنين':'mon','الإثنين':'mon','اثنين':'mon','monday':'mon','mon':'mon',
     'الثلاثاء':'tue','ثلاثاء':'tue','tuesday':'tue','tue':'tue',
     'الأربعاء':'wed','الاربعاء':'wed','اربعاء':'wed','wednesday':'wed','wed':'wed',
-    'الخميس':'thu','خميس':'thu','thursday':'thu','thu':'thu'
+    'الخميس':'thu','خميس':'thu','thursday':'thu','thu':'thu',
+    'السبت':'sat','السبـت':'sat','سبت':'sat','saturday':'sat','sat':'sat'
   };
 
   var db = null;
@@ -560,7 +563,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
   function pad(n){ return String(n).padStart(2,'0'); }
   function fmtHM(d){ return pad(d.getHours())+':'+pad(d.getMinutes()); }
   function fmtISODate(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
-  function jsDayToCode(jsDay){ var map=[ 'sun','mon','tue','wed','thu',null,null]; return map[jsDay]; }
+  function jsDayToCode(jsDay){ var map=[ 'sun','mon','tue','wed','thu',null,'sat']; return map[jsDay]; }
   function overlap(s1,e1,s2,e2){ return s1 < e2 && s2 < e1; }
   function collegeName(id){
     if(!config) return id;
@@ -915,6 +918,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
         var item = el('div',{class:'entry-item'});
         item.appendChild(el('div',{class:'entry-time', text:e.start+' – '+e.end}));
         item.appendChild(el('div',{text:e.course}));
+        if(e.stage) item.appendChild(el('div',{class:'faint', text:'المرحلة: '+e.stage}));
         item.appendChild(el('div',{class:'faint', text:e.instructor+' · '+roomName(e.room)}));
         if(canEditCollege(e.college)){
           var delBtn = el('button',{class:'entry-del', type:'button', text:'✕', title:'حذف'});
@@ -943,7 +947,8 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       start: $('schStart').value,
       end: $('schEnd').value,
       course: $('schCourse').value.trim(),
-      instructor: $('schInstructor').value.trim()
+      instructor: $('schInstructor').value.trim(),
+      stage: $('schStage').value.trim()
     };
     if(data.start >= data.end){ showToast('وقت النهاية يجب أن يكون بعد وقت البداية'); return; }
     var conflict = findScheduleConflict(data.room, data.day, data.start, data.end, null);
@@ -1028,10 +1033,10 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
 
   function downloadTemplate(){
     if(!window.XLSX){ showToast('تعذّر تحميل مكتبة Excel، تحقق من الاتصال'); return; }
-    var headers = ['اليوم','القاعة','من (HH:MM)','إلى (HH:MM)','المادة','التدريسي'];
-    var example = ['الأحد', (config&&config.rooms[0]?config.rooms[0].name:'Small Group 1'), '10:00','11:00','مثال: التشريح','د. فلان'];
+    var headers = ['اليوم','القاعة','من (HH:MM)','إلى (HH:MM)','المادة','التدريسي','المرحلة الدراسية'];
+    var example = ['الأحد', (config&&config.rooms[0]?config.rooms[0].name:'Small Group 1'), '10:00','11:00','مثال: التشريح','د. فلان','المرحلة الأولى'];
     var ws = XLSX.utils.aoa_to_sheet([headers, example]);
-    ws['!cols'] = [{wch:12},{wch:16},{wch:12},{wch:12},{wch:26},{wch:20}];
+    ws['!cols'] = [{wch:12},{wch:16},{wch:12},{wch:12},{wch:26},{wch:20},{wch:18}];
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'الجدول');
     var ws2Data = [['أيام مسموحة (اكتبها كما هي)']]
@@ -1069,6 +1074,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       var end = normalizeTime(r[3]);
       var course = String(r[4]||'').trim();
       var instructor = String(r[5]||'').trim();
+      var stage = String(r[6]||'').trim();
       var errors = [];
       if(!day) errors.push('اسم اليوم غير معروف');
       if(!room) errors.push('اسم القاعة لا يطابق قاعة معتمدة');
@@ -1077,7 +1083,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       if(!course) errors.push('اسم المادة مطلوب');
       if(!instructor) errors.push('اسم التدريسي مطلوب');
       return {
-        raw:r, day:day, room:room, start:start, end:end, course:course, instructor:instructor,
+        raw:r, day:day, room:room, start:start, end:end, course:course, instructor:instructor, stage:stage,
         dayRaw:r[0], roomRaw:r[1], errors:errors
       };
     });
@@ -1127,7 +1133,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     var table = el('table',{class:'import-table'});
     table.appendChild(el('tr',{},[
       el('th',{text:'#'}), el('th',{text:'اليوم'}), el('th',{text:'القاعة'}), el('th',{text:'من'}),
-      el('th',{text:'إلى'}), el('th',{text:'المادة'}), el('th',{text:'التدريسي'}), el('th',{text:'الحالة'})
+      el('th',{text:'إلى'}), el('th',{text:'المادة'}), el('th',{text:'التدريسي'}), el('th',{text:'المرحلة'}), el('th',{text:'الحالة'})
     ]));
     importedRows.forEach(function(row, i){
       var cls = row.errors.length ? 'row-error' : (row.conflict ? 'row-conflict' : '');
@@ -1140,6 +1146,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
         el('td',{text: row.end||'—'}),
         el('td',{text: row.course||'—'}),
         el('td',{text: row.instructor||'—'}),
+        el('td',{text: row.stage||'—'}),
         el('td',{text: statusTxt})
       ]));
     });
@@ -1166,7 +1173,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       var addPromises = validRows.map(function(r){
         return db.collection('schedule').add({
           college: scheduleCollege, room:r.room, day:r.day, start:r.start, end:r.end,
-          course:r.course, instructor:r.instructor, createdAt:new Date().toISOString(), importedBy: roleDisplayLabel()
+          course:r.course, instructor:r.instructor, stage:r.stage||'', createdAt:new Date().toISOString(), importedBy: roleDisplayLabel()
         });
       });
       return Promise.all(addPromises);
