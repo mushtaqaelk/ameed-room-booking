@@ -289,6 +289,40 @@ table.import-table tr.row-error td{background:var(--busy-soft);}
 table.import-table tr.row-conflict td{background:var(--pending-soft);}
 .import-summary{font-size:13px; color:var(--ink-soft); display:flex; gap:14px; flex-wrap:wrap;}
 .import-summary b{color:var(--ink);}
+
+/* ---------- instructor report ---------- */
+.report-sheet{display:flex; flex-direction:column; gap:16px;}
+.report-head{display:flex; align-items:center; gap:14px; border-bottom:2px solid var(--accent); padding-bottom:12px;}
+.report-titles{display:flex; flex-direction:column; gap:2px;}
+.report-univ{font-family:var(--font-display); font-size:20px; font-weight:700; color:var(--ink);}
+.report-sub{font-size:12.5px; color:var(--ink-soft);}
+.report-title{font-size:15px; font-weight:800; color:var(--accent-strong); margin-top:4px;}
+.report-meta{display:flex; flex-direction:column; gap:6px; font-size:13.5px; color:var(--ink);}
+.report-meta b{color:var(--ink-soft); font-weight:700;}
+.report-stats{display:flex; gap:12px; flex-wrap:wrap;}
+.stat-box{
+  flex:1; min-width:130px; background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-sm);
+  padding:12px 14px; text-align:center;
+}
+.stat-box.stat-total{background:var(--accent-soft); border-color:var(--accent);}
+.stat-num{font-size:22px; font-weight:900; color:var(--accent-strong); font-variant-numeric:tabular-nums;}
+.stat-label{font-size:12px; color:var(--ink-soft); margin-top:2px;}
+table.report-table{border-collapse:collapse; width:100%; font-size:13px; min-width:640px;}
+table.report-table th, table.report-table td{
+  padding:8px 10px; text-align:right; border-bottom:1px solid var(--border); white-space:nowrap;
+}
+table.report-table th{background:var(--surface-2); color:var(--ink-soft); font-weight:800; font-size:12.5px;}
+
+@media print{
+  body *{ visibility:hidden; }
+  #printableReport, #printableReport *{ visibility:visible; }
+  #printableReport{ position:absolute; inset-inline-start:0; top:0; width:100%; }
+  #reportPrintRow{ display:none !important; }
+  .report-univ, .report-title, .stat-num{ color:#000 !important; }
+  .stat-box{ background:#fff !important; border:1px solid #999 !important; }
+  .report-head{ border-bottom-color:#000 !important; }
+  @page{ margin:14mm; }
+}
 </style>
 </head>
 <body>
@@ -317,6 +351,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     <button class="tab active" data-tab="home" type="button">الرئيسية</button>
     <button class="tab" data-tab="schedule" type="button">الجدول الأسبوعي</button>
     <button class="tab" data-tab="bookings" type="button">طلبات الحجز</button>
+    <button class="tab" data-tab="reports" type="button">تقرير الأساتذة</button>
     <button class="tab" data-tab="admin" id="adminTabBtn" type="button" hidden>الإدارة</button>
   </nav>
 
@@ -356,7 +391,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     </div>
     <div class="card" id="importCard" hidden>
       <h3>رفع الجدول من ملف Excel</h3>
-      <p class="muted">نزّل النموذج، عبّئه بجدول الكلية الأسبوعي، ثم ارفعه هنا. الأعمدة بالترتيب: اليوم، القاعة، من (HH:MM)، إلى (HH:MM)، المادة، التدريسي، المرحلة الدراسية. أسماء الأيام والقاعات يجب أن تطابق القيم المعتمدة في النظام (موجودة في ورقة "القيم المسموحة" داخل النموذج).</p>
+      <p class="muted">نزّل النموذج، عبّئه بجدول الكلية الأسبوعي، ثم ارفعه هنا. الأعمدة بالترتيب: اليوم، القاعة، من (HH:MM)، إلى (HH:MM)، المادة، التدريسي، المرحلة الدراسية، نوع المحاضرة (نظري/عملي). أسماء الأيام والقاعات يجب أن تطابق القيم المعتمدة في النظام (موجودة في ورقة "القيم المسموحة" داخل النموذج).</p>
       <div class="import-actions">
         <button class="btn" type="button" id="downloadTemplateBtn">📥 تنزيل نموذج Excel فارغ</button>
       </div>
@@ -382,6 +417,13 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
           <div class="field"><label for="schCourse">اسم المادة</label><input id="schCourse" type="text" placeholder="مثال: التشريح" required></div>
           <div class="field"><label for="schInstructor">التدريسي</label><input id="schInstructor" type="text" placeholder="مثال: د. مشتاق" required></div>
           <div class="field"><label for="schStage">المرحلة الدراسية</label><input id="schStage" type="text" placeholder="مثال: المرحلة الثانية" required></div>
+          <div class="field"><label for="schType">نوع المحاضرة</label>
+            <select id="schType" required>
+              <option value="">اختر...</option>
+              <option value="theory">نظري</option>
+              <option value="practical">عملي</option>
+            </select>
+          </div>
         </div>
         <div id="schWarn"></div>
         <div class="row" style="margin-top:10px;">
@@ -428,6 +470,20 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       </div>
       <div class="stack" id="bookingsList"></div>
     </div>
+  </section>
+
+  <!-- REPORTS -->
+  <section class="panel" id="panel-reports" hidden>
+    <div class="card">
+      <h2>تقرير تدريسي</h2>
+      <p class="muted">ابحث باسم التدريسي (أو جزء من الاسم) لعرض تقرير كامل بجدول محاضراته وعدد ساعاته النظرية والعملية، قابل للطباعة مباشرة.</p>
+      <div class="row" style="gap:10px;">
+        <input id="reportSearchInput" type="text" placeholder="مثال: د. مشتاق كريم" list="instructorList" style="flex:1; min-width:220px; padding:9px 11px; border-radius:9px; border:1px solid var(--border-strong); background:var(--surface-2); color:var(--ink); font-family:inherit;">
+        <datalist id="instructorList"></datalist>
+        <button class="btn btn-primary" type="button" id="reportSearchBtn">بحث</button>
+      </div>
+    </div>
+    <div class="card" id="reportResultCard" hidden></div>
   </section>
 
   <!-- ADMIN -->
@@ -679,6 +735,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     renderScheduleTab();
     renderBookingsTab();
     renderAdminTab();
+    populateInstructorDatalist();
   }
 
   /* ---------------- shell ---------------- */
@@ -687,7 +744,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       btn.addEventListener('click', function(){
         document.querySelectorAll('.tab').forEach(function(b){ b.classList.remove('active'); });
         btn.classList.add('active');
-        ['home','schedule','bookings','admin'].forEach(function(t){
+        ['home','schedule','bookings','reports','admin'].forEach(function(t){
           $('panel-'+t).hidden = (t !== btn.dataset.tab);
         });
       });
@@ -699,6 +756,10 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     $('bookingForm').addEventListener('submit', onBookingSubmit);
     $('collegeForm').addEventListener('submit', onAddCollege);
     $('roomForm').addEventListener('submit', onAddRoom);
+    $('reportSearchBtn').addEventListener('click', renderInstructorReport);
+    $('reportSearchInput').addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter'){ ev.preventDefault(); renderInstructorReport(); }
+    });
     document.querySelectorAll('#bookingFilterChips .chip').forEach(function(chip){
       chip.addEventListener('click', function(){
         bookingFilter = chip.dataset.filter;
@@ -916,7 +977,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       }
       entries.forEach(function(e){
         var item = el('div',{class:'entry-item'});
-        item.appendChild(el('div',{class:'entry-time', text:e.start+' – '+e.end}));
+        item.appendChild(el('div',{class:'entry-time', text:e.start+' – '+e.end+(e.sessionType?' · '+(e.sessionType==='practical'?'عملي':'نظري'):'')}));
         item.appendChild(el('div',{text:e.course}));
         if(e.stage) item.appendChild(el('div',{class:'faint', text:'المرحلة: '+e.stage}));
         item.appendChild(el('div',{class:'faint', text:e.instructor+' · '+roomName(e.room)}));
@@ -948,7 +1009,8 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       end: $('schEnd').value,
       course: $('schCourse').value.trim(),
       instructor: $('schInstructor').value.trim(),
-      stage: $('schStage').value.trim()
+      stage: $('schStage').value.trim(),
+      sessionType: $('schType').value
     };
     if(data.start >= data.end){ showToast('وقت النهاية يجب أن يكون بعد وقت البداية'); return; }
     var conflict = findScheduleConflict(data.room, data.day, data.start, data.end, null);
@@ -1012,6 +1074,17 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     var r = config.rooms.find(function(x){ return x.name.trim().toLowerCase() === s; });
     return r ? r.id : null;
   }
+  var SESSION_TYPE_ALIASES = {
+    'نظري':'theory','نظريه':'theory','نظرية':'theory','theory':'theory','theoretical':'theory','th':'theory',
+    'عملي':'practical','عمليه':'practical','عملية':'practical','مختبر':'practical','practical':'practical','lab':'practical'
+  };
+  function normalizeSessionType(v){
+    if(v === null || v === undefined) return '';
+    var s = String(v).trim().toLowerCase();
+    if(!s) return '';
+    return SESSION_TYPE_ALIASES[s] || '';
+  }
+  function sessionTypeLabel(t){ return t==='practical'?'عملي':(t==='theory'?'نظري':'—'); }
   function extractDataRows(rows){
     if(!rows.length) return [];
     var first = rows[0] || [];
@@ -1033,16 +1106,17 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
 
   function downloadTemplate(){
     if(!window.XLSX){ showToast('تعذّر تحميل مكتبة Excel، تحقق من الاتصال'); return; }
-    var headers = ['اليوم','القاعة','من (HH:MM)','إلى (HH:MM)','المادة','التدريسي','المرحلة الدراسية'];
-    var example = ['الأحد', (config&&config.rooms[0]?config.rooms[0].name:'Small Group 1'), '10:00','11:00','مثال: التشريح','د. فلان','المرحلة الأولى'];
+    var headers = ['اليوم','القاعة','من (HH:MM)','إلى (HH:MM)','المادة','التدريسي','المرحلة الدراسية','نوع المحاضرة (نظري/عملي)'];
+    var example = ['الأحد', (config&&config.rooms[0]?config.rooms[0].name:'Small Group 1'), '10:00','11:00','مثال: التشريح','د. فلان','المرحلة الأولى','نظري'];
     var ws = XLSX.utils.aoa_to_sheet([headers, example]);
-    ws['!cols'] = [{wch:12},{wch:16},{wch:12},{wch:12},{wch:26},{wch:20},{wch:18}];
+    ws['!cols'] = [{wch:12},{wch:16},{wch:12},{wch:12},{wch:26},{wch:20},{wch:18},{wch:20}];
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'الجدول');
     var ws2Data = [['أيام مسموحة (اكتبها كما هي)']]
       .concat(WEEK_DAYS.map(function(d){ return [d.label]; }))
       .concat([[''],['أسماء القاعات المعتمدة (اكتبها كما هي تماماً)']])
-      .concat((config?config.rooms:[]).map(function(r){ return [r.name]; }));
+      .concat((config?config.rooms:[]).map(function(r){ return [r.name]; }))
+      .concat([[''],['أنواع المحاضرة المسموحة'],['نظري'],['عملي']]);
     var ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
     ws2['!cols'] = [{wch:34}];
     XLSX.utils.book_append_sheet(wb, ws2, 'القيم المسموحة');
@@ -1075,6 +1149,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       var course = String(r[4]||'').trim();
       var instructor = String(r[5]||'').trim();
       var stage = String(r[6]||'').trim();
+      var sessionType = normalizeSessionType(r[7]);
       var errors = [];
       if(!day) errors.push('اسم اليوم غير معروف');
       if(!room) errors.push('اسم القاعة لا يطابق قاعة معتمدة');
@@ -1083,7 +1158,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       if(!course) errors.push('اسم المادة مطلوب');
       if(!instructor) errors.push('اسم التدريسي مطلوب');
       return {
-        raw:r, day:day, room:room, start:start, end:end, course:course, instructor:instructor, stage:stage,
+        raw:r, day:day, room:room, start:start, end:end, course:course, instructor:instructor, stage:stage, sessionType:sessionType,
         dayRaw:r[0], roomRaw:r[1], errors:errors
       };
     });
@@ -1133,7 +1208,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
     var table = el('table',{class:'import-table'});
     table.appendChild(el('tr',{},[
       el('th',{text:'#'}), el('th',{text:'اليوم'}), el('th',{text:'القاعة'}), el('th',{text:'من'}),
-      el('th',{text:'إلى'}), el('th',{text:'المادة'}), el('th',{text:'التدريسي'}), el('th',{text:'المرحلة'}), el('th',{text:'الحالة'})
+      el('th',{text:'إلى'}), el('th',{text:'المادة'}), el('th',{text:'التدريسي'}), el('th',{text:'المرحلة'}), el('th',{text:'النوع'}), el('th',{text:'الحالة'})
     ]));
     importedRows.forEach(function(row, i){
       var cls = row.errors.length ? 'row-error' : (row.conflict ? 'row-conflict' : '');
@@ -1147,6 +1222,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
         el('td',{text: row.course||'—'}),
         el('td',{text: row.instructor||'—'}),
         el('td',{text: row.stage||'—'}),
+        el('td',{text: sessionTypeLabel(row.sessionType)}),
         el('td',{text: statusTxt})
       ]));
     });
@@ -1173,7 +1249,7 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       var addPromises = validRows.map(function(r){
         return db.collection('schedule').add({
           college: scheduleCollege, room:r.room, day:r.day, start:r.start, end:r.end,
-          course:r.course, instructor:r.instructor, stage:r.stage||'', createdAt:new Date().toISOString(), importedBy: roleDisplayLabel()
+          course:r.course, instructor:r.instructor, stage:r.stage||'', sessionType:r.sessionType||'', createdAt:new Date().toISOString(), importedBy: roleDisplayLabel()
         });
       });
       return Promise.all(addPromises);
@@ -1184,6 +1260,112 @@ table.import-table tr.row-conflict td{background:var(--pending-soft);}
       $('scheduleFile').value = '';
       $('fileNameLabel').textContent = 'لم يُختر ملف بعد';
     }).catch(function(){ showToast('حدث خطأ أثناء الاستيراد — قد يكون تم استيراد جزء من الصفوف'); });
+  }
+
+  /* ---------------- INSTRUCTOR REPORTS ---------------- */
+  function splitInstructorNames(raw){
+    return String(raw||'').split(/[،,+\/]| و /).map(function(s){ return s.trim(); }).filter(Boolean);
+  }
+  function normalizeNameForMatch(s){ return String(s||'').trim().toLowerCase(); }
+  function matchesInstructor(raw, query){
+    var q = normalizeNameForMatch(query);
+    if(!q) return false;
+    var parts = splitInstructorNames(raw);
+    if(!parts.length) return false;
+    return parts.some(function(p){
+      var np = normalizeNameForMatch(p);
+      return np.indexOf(q) > -1 || q.indexOf(np) > -1;
+    });
+  }
+  function timeToMinutes(t){
+    var p = String(t||'').split(':');
+    return (parseInt(p[0],10)||0)*60 + (parseInt(p[1],10)||0);
+  }
+  function durationHours(start,end){
+    var mins = timeToMinutes(end) - timeToMinutes(start);
+    return Math.max(0, mins) / 60;
+  }
+  function populateInstructorDatalist(){
+    var dl = $('instructorList');
+    if(!dl) return;
+    var names = new Set();
+    scheduleEntries.forEach(function(e){ splitInstructorNames(e.instructor).forEach(function(n){ if(n) names.add(n); }); });
+    dl.innerHTML = '';
+    Array.from(names).sort().forEach(function(n){ dl.appendChild(el('option',{value:n})); });
+  }
+  function renderInstructorReport(){
+    var q = $('reportSearchInput').value.trim();
+    var card = $('reportResultCard');
+    card.innerHTML = '';
+    if(!q){ showToast('اكتب اسم التدريسي أولاً'); card.hidden = true; return; }
+    var matches = scheduleEntries.filter(function(e){ return matchesInstructor(e.instructor, q); });
+    card.hidden = false;
+    if(!matches.length){
+      card.appendChild(el('div',{class:'muted', text:'لم يتم العثور على تدريسي بهذا الاسم ضمن الجدول الحالي.'}));
+      return;
+    }
+    var collegeIds = Array.from(new Set(matches.map(function(e){ return e.college; })));
+    var collegesTxt = collegeIds.map(collegeName).join('، ');
+    var theoryHours = 0, practicalHours = 0, unspecHours = 0;
+    matches.forEach(function(e){
+      var h = durationHours(e.start, e.end);
+      if(e.sessionType === 'theory') theoryHours += h;
+      else if(e.sessionType === 'practical') practicalHours += h;
+      else unspecHours += h;
+    });
+    var totalHours = theoryHours + practicalHours + unspecHours;
+    var sorted = matches.slice().sort(function(a,b){
+      var da = WEEK_DAYS.findIndex(function(w){ return w.code===a.day; });
+      var db2 = WEEK_DAYS.findIndex(function(w){ return w.code===b.day; });
+      if(da !== db2) return da-db2;
+      return a.start.localeCompare(b.start);
+    });
+
+    var logoSvg = el('div',{class:'report-logo', html:'<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="52" height="52"><path d="M24 4C15 12 10 18 10 27a14 14 0 0 0 28 0c0-9-5-15-14-23Z" fill="#E3EFE9" stroke="#0B5D4C" stroke-width="2"/><path d="M18 44V27a6 6 0 0 1 12 0v17" stroke="#0B5D4C" stroke-width="2" fill="none"/><circle cx="24" cy="20" r="3" fill="#0B5D4C"/></svg>'});
+
+    var reportRoot = el('div',{class:'report-sheet', id:'printableReport'});
+    reportRoot.appendChild(el('div',{class:'report-head'},[
+      logoSvg,
+      el('div',{class:'report-titles'},[
+        el('div',{class:'report-univ', text:'جامعة العميد'}),
+        el('div',{class:'report-sub', text:'الشؤون الإدارية والقانونية'}),
+        el('div',{class:'report-title', text:'تقرير التدريسي'})
+      ])
+    ]));
+    reportRoot.appendChild(el('div',{class:'report-meta'},[
+      el('div',{},[el('b',{text:'اسم التدريسي: '}), document.createTextNode(q)]),
+      el('div',{},[el('b',{text:'الكلية: '}), document.createTextNode(collegesTxt||'—')]),
+      el('div',{},[el('b',{text:'تاريخ إصدار التقرير: '}), document.createTextNode(fmtISODate(new Date()))])
+    ]));
+    reportRoot.appendChild(el('div',{class:'report-stats'},[
+      el('div',{class:'stat-box'},[el('div',{class:'stat-num', text:theoryHours.toFixed(1)}), el('div',{class:'stat-label', text:'ساعات نظري / أسبوع'})]),
+      el('div',{class:'stat-box'},[el('div',{class:'stat-num', text:practicalHours.toFixed(1)}), el('div',{class:'stat-label', text:'ساعات عملي / أسبوع'})]),
+      unspecHours > 0 ? el('div',{class:'stat-box'},[el('div',{class:'stat-num', text:unspecHours.toFixed(1)}), el('div',{class:'stat-label', text:'غير محدد النوع'})]) : null,
+      el('div',{class:'stat-box stat-total'},[el('div',{class:'stat-num', text:totalHours.toFixed(1)}), el('div',{class:'stat-label', text:'إجمالي الساعات / أسبوع'})])
+    ]));
+    var table = el('table',{class:'report-table'});
+    table.appendChild(el('tr',{},[
+      el('th',{text:'اليوم'}), el('th',{text:'من'}), el('th',{text:'إلى'}), el('th',{text:'المدة'}),
+      el('th',{text:'النوع'}), el('th',{text:'المادة'}), el('th',{text:'المرحلة'}), el('th',{text:'القاعة'}), el('th',{text:'الكلية'})
+    ]));
+    sorted.forEach(function(e){
+      table.appendChild(el('tr',{},[
+        el('td',{text:dayLabel(e.day)}),
+        el('td',{text:e.start}),
+        el('td',{text:e.end}),
+        el('td',{text:durationHours(e.start,e.end).toFixed(1)}),
+        el('td',{text:sessionTypeLabel(e.sessionType)}),
+        el('td',{text:e.course}),
+        el('td',{text:e.stage||'—'}),
+        el('td',{text:roomName(e.room)}),
+        el('td',{text:collegeName(e.college)})
+      ]));
+    });
+    reportRoot.appendChild(el('div',{class:'table-scroll'},[table]));
+    card.appendChild(reportRoot);
+    card.appendChild(el('div',{class:'row', id:'reportPrintRow', style:'margin-top:14px;'},[
+      el('button',{class:'btn btn-primary', type:'button', text:'🖨️ طباعة التقرير', onclick:function(){ window.print(); }})
+    ]));
   }
 
   /* ---------------- BOOKINGS ---------------- */
